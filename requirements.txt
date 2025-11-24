@@ -1,0 +1,33 @@
+# Pleat Saw Controller - Python Dependencies
+
+# Modbus RTU communication
+pymodbus==3.5.2
+
+# Serial communication (Nextion HMI)
+pyserial==3.5
+
+# YAML configuration
+pyyaml==6.0.1
+
+# Web monitoring dashboard
+Flask==3.0.0
+Flask-SocketIO==5.3.5
+python-socketio==5.10.0
+python-engineio==4.8.0
+simple-websocket==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-timeout==2.2.0
+pytest-asyncio==0.21.1
+
+# Type hints
+typing-extensions==4.9.0
+
+# Async support
+asyncio-mqtt==0.16.1  # Optional, for future MQTT logging
+
+# Development tools (optional)
+black==23.12.1
+pylint==3.0.3
+mypy==1.8.0

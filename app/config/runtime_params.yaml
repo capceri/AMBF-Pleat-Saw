@@ -1,0 +1,5 @@
+m1_rpm: 605
+m2_fwd_timeout: 25.0
+m2_rev_timeout: 20.0
+m2_vel_fwd_mm_s: 50.0
+m2_vel_rev_mm_s: 70.0

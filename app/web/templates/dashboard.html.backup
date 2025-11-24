@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pleat Saw Monitor - Commissioning Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1>Pleat Saw Controller - Monitoring Dashboard</h1>
+            <div class="connection-status">
+                <span id="connection-indicator" class="status-dot disconnected"></span>
+                <span id="connection-text">Connecting...</span>
+            </div>
+        </header>
+
+        <!-- System Status Panel -->
+        <section class="panel system-status">
+            <h2>System Status</h2>
+            <div class="status-grid">
+                <div class="status-item">
+                    <label>State:</label>
+                    <span id="system-state" class="value state-idle">UNKNOWN</span>
+                </div>
+                <div class="status-item">
+                    <label>Safety:</label>
+                    <span id="system-safety" class="value safety-unknown">UNKNOWN</span>
+                </div>
+                <div class="status-item">
+                    <label>Light Curtain:</label>
+                    <span id="system-light-curtain" class="value safety-unknown">UNKNOWN</span>
+                </div>
+                <div class="status-item">
+                    <label>System:</label>
+                    <span id="system-paused" class="value">RUNNING</span>
+                </div>
+                <div class="status-item">
+                    <label>Alarm:</label>
+                    <span id="system-alarm" class="value">None</span>
+                </div>
+                <div class="status-item">
+                    <label>Cycle Count:</label>
+                    <span id="cycle-count" class="value">0</span>
+                </div>
+                <div class="status-item">
+                    <label>Uptime:</label>
+                    <span id="uptime" class="value">0s</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Hardware Connections Panel (Diagnostics) -->
+        <section class="panel diagnostics-panel" id="diagnostics-panel" style="display: none;">
+            <h2>⚠ Hardware Connection Status</h2>
+            <div id="init-errors" class="error-list"></div>
+            <div class="connection-grid">
+                <div class="connection-item">
+                    <label>Modbus (RS-485):</label>
+                    <span id="conn-modbus" class="connection-indicator unknown">Checking...</span>
+                    <span id="conn-modbus-desc" class="connection-desc">I/O and Motors</span>
+                </div>
+                <div class="connection-item">
+                    <label>Nextion HMI:</label>
+                    <span id="conn-nextion" class="connection-indicator unknown">Checking...</span>
+                    <span id="conn-nextion-desc" class="connection-desc">Display Panel</span>
+                </div>
+            </div>
+            <div class="diagnostics-hint">
+                <strong>Troubleshooting:</strong>
+                <ul>
+                    <li>Check RS-485 adapter is connected (should appear as /dev/ttyUSB0)</li>
+                    <li>Verify Modbus devices are powered on</li>
+                    <li>Check Nextion display is connected via serial</li>
+                    <li>Run diagnostic script: <code>bash diagnose_web_monitor.sh</code></li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- I/O Status Panels -->
+        <div class="io-container">
+            <!-- Inputs -->
+            <section class="panel io-panel">
+                <h2>Digital Inputs</h2>
+                <div class="io-grid">
+                    <div class="io-item">
+                        <label>Start Button (IN1):</label>
+                        <span id="input-start" class="io-indicator off">OFF</span>
+                        <div class="input-controls">
+                            <button id="toggle-start" class="btn-small btn-toggle" onclick="toggleInputOverride('start')">Force ON</button>
+                            <span id="override-start" class="override-indicator" style="display: none;">OVERRIDE</span>
+                        </div>
+                    </div>
+                    <div class="io-item">
+                        <label>Sensor2 / Home (IN2):</label>
+                        <span id="input-sensor2" class="io-indicator off">OFF</span>
+                        <div class="input-controls">
+                            <button id="toggle-sensor2" class="btn-small btn-toggle" onclick="toggleInputOverride('sensor2')">Force ON</button>
+                            <span id="override-sensor2" class="override-indicator" style="display: none;">OVERRIDE</span>
+                        </div>
+                    </div>
+                    <div class="io-item">
+                        <label>Sensor3 / Forward (IN3):</label>
+                        <span id="input-sensor3" class="io-indicator off">OFF</span>
+                        <div class="input-controls">
+                            <button id="toggle-sensor3" class="btn-small btn-toggle" onclick="toggleInputOverride('sensor3')">Force ON</button>
+                            <span id="override-sensor3" class="override-indicator" style="display: none;">OVERRIDE</span>
+                        </div>
+                    </div>
+                    <div class="io-item">
+                        <label>Light Curtain (IN15):</label>
+                        <span id="input-light-curtain" class="io-indicator off">BLOCKED</span>
+                        <div class="input-controls">
+                            <button id="toggle-light_curtain" class="btn-small btn-toggle" onclick="toggleInputOverride('light_curtain')">Force OK</button>
+                            <span id="override-light_curtain" class="override-indicator" style="display: none;">OVERRIDE</span>
+                        </div>
+                    </div>
+                    <div class="io-item">
+                        <label>Safety (IN16):</label>
+                        <span id="input-safety" class="io-indicator off">NOT READY</span>
+                        <div class="input-controls">
+                            <button id="toggle-safety" class="btn-small btn-toggle" onclick="toggleInputOverride('safety')">Force READY</button>
+                            <span id="override-safety" class="override-indicator" style="display: none;">OVERRIDE</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-override-controls">
+                    <button class="btn btn-warning" onclick="clearAllInputOverrides()">Clear All Overrides</button>
+                    <span class="diagnostic-warning">⚠ Input overrides are for diagnostic purposes only</span>
+                </div>
+            </section>
+
+            <!-- Outputs -->
+            <section class="panel io-panel">
+                <h2>Digital Outputs</h2>
+                <div class="io-grid">
+                    <div class="io-item">
+                        <label>Clamp (CH1):</label>
+                        <span id="output-clamp" class="io-indicator off">OFF</span>
+                        <button class="btn-small" onclick="toggleOutput('clamp')">Toggle</button>
+                    </div>
+                    <div class="io-item">
+                        <label>Air Jet (CH2):</label>
+                        <span id="output-air_jet" class="io-indicator off">OFF</span>
+                        <button class="btn-small" onclick="toggleOutput('air_jet')">Toggle</button>
+                    </div>
+                    <div class="io-item">
+                        <label>Green Solid (CH3):</label>
+                        <span id="output-green_solid" class="io-indicator off">OFF</span>
+                        <button class="btn-small" onclick="toggleOutput('green_solid')">Toggle</button>
+                    </div>
+                    <div class="io-item">
+                        <label>Green Flash (CH4):</label>
+                        <span id="output-green_flash" class="io-indicator off">OFF</span>
+                        <button class="btn-small" onclick="toggleOutput('green_flash')">Toggle</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Motor Status Panels -->
+        <div class="motor-container">
+            <!-- M1 Blade -->
+            <section class="panel motor-panel">
+                <h2>M1 - Blade Motor</h2>
+                <div class="motor-status">
+                    <div class="status-item">
+                        <label>Running:</label>
+                        <span id="m1-running" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Fault:</label>
+                        <span id="m1-fault" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Ready:</label>
+                        <span id="m1-ready" class="io-indicator off">NO</span>
+                    </div>
+                </div>
+                <div class="motor-controls">
+                    <label>RPM:</label>
+                    <input type="number" id="m1-rpm" value="100" min="50" max="6000" step="100">
+                    <button class="btn" onclick="startM1()">Start</button>
+                    <button class="btn btn-danger" onclick="stopM1()">Stop</button>
+                </div>
+                <div class="motor-controls">
+                    <label>Pulses:</label>
+                    <input type="number" id="m1-pulses" value="200" min="1" max="200000" step="10">
+                    <button class="btn" onclick="jogM1Pulses()">Jog Pulses</button>
+                </div>
+            </section>
+
+            <!-- M2 Fixture -->
+            <section class="panel motor-panel">
+                <h2>M2 - Fixture Motor</h2>
+                <div class="motor-status">
+                    <div class="status-item">
+                        <label>In Motion:</label>
+                        <span id="m2-motion" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>At S2:</label>
+                        <span id="m2-at-s2" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>At S3:</label>
+                        <span id="m2-at-s3" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Fault:</label>
+                        <span id="m2-fault" class="io-indicator off">NO</span>
+                    </div>
+                </div>
+                <div class="motor-controls">
+                    <label>Vel (mm/s):</label>
+                    <input type="number" id="m2-vel" value="10" min="10" max="400" step="10">
+                    <button class="btn" onclick="jogM2Forward()">Feed FWD (Cont.)</button>
+                    <button class="btn" onclick="jogM2Reverse()">Feed REV (Cont.)</button>
+                    <button class="btn btn-danger" onclick="stopM2()">Stop</button>
+                </div>
+                <div class="motor-controls">
+                    <label>Pulses:</label>
+                    <input type="number" id="m2-pulses" value="200" min="1" max="200000" step="10">
+                    <button class="btn" onclick="jogM2Pulses(true)">Jog +</button>
+                    <button class="btn" onclick="jogM2Pulses(false)">Jog -</button>
+                </div>
+            </section>
+
+            <!-- M3 Backstop -->
+            <section class="panel motor-panel">
+                <h2>M3 - Backstop Motor</h2>
+                <div class="motor-status">
+                    <div class="status-item">
+                        <label>Position:</label>
+                        <span id="m3-position" class="value">0.000 mm</span>
+                    </div>
+                    <div class="status-item">
+                        <label>In Motion:</label>
+                        <span id="m3-motion" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>At Target:</label>
+                        <span id="m3-at-target" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Homed:</label>
+                        <span id="m3-homed" class="io-indicator off">NO</span>
+                    </div>
+                    <div class="status-item">
+                        <label>Fault:</label>
+                        <span id="m3-fault" class="io-indicator off">NO</span>
+                    </div>
+                </div>
+                <div class="motor-controls">
+                    <label>Target (mm):</label>
+                    <input type="number" id="m3-target" value="0" min="0" max="1000" step="0.1">
+                    <button class="btn" onclick="gotoM3()">Go To</button>
+                    <button class="btn" onclick="homeM3()">Home</button>
+                    <button class="btn btn-danger" onclick="stopM3()">Stop</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Cycle Control Panel -->
+        <section class="panel control-panel">
+            <h2>Cycle Control</h2>
+            <div class="control-buttons">
+                <button class="btn btn-large btn-success" onclick="startCycle()">Start Cycle</button>
+                <button class="btn btn-large btn-danger" onclick="stopCycle()">Emergency Stop</button>
+                <button class="btn btn-large btn-warning" onclick="resetAlarms()">Reset Alarms</button>
+            </div>
+        </section>
+
+        <!-- Statistics Panel -->
+        <section class="panel stats-panel">
+            <h2>System Statistics</h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <label>Modbus Reads:</label>
+                    <span id="stat-modbus-reads" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Modbus Writes:</label>
+                    <span id="stat-modbus-writes" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Modbus Errors:</label>
+                    <span id="stat-modbus-errors" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>I/O Polls:</label>
+                    <span id="stat-io-polls" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>I/O Changes:</label>
+                    <span id="stat-io-changes" class="value">0</span>
+                </div>
+                <div class="stat-item">
+                    <label>Total Alarms:</label>
+                    <span id="stat-alarms" class="value">0</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Console Log -->
+        <section class="panel console-panel">
+            <h2>Command Log</h2>
+            <div id="console" class="console"></div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Pleat Saw Controller v3.0 - Monitoring Dashboard</p>
+            <p>For commissioning and troubleshooting use only</p>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

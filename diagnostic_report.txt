@@ -1,0 +1,43 @@
+===============================================================================
+PLEAT SAW COMMISSIONING DIAGNOSTICS - 2025-10-23
+===============================================================================
+
+SUMMARY:
+--------
+✓ Software: Installed and running
+✓ Web Dashboard: http://192.168.68.109:5000
+✗ RS-485 Modbus: NO DEVICES RESPONDING
+✗ Nextion HMI: Port /dev/ttyAMA0 missing
+
+SERIAL PORTS:
+-------------
+Available: /dev/ttyS0 (mini UART)
+Missing: /dev/ttyAMA0 (used by Bluetooth)
+Current Modbus port: /dev/ttyS0
+
+MODBUS SCAN RESULTS:
+--------------------
+All slaves (1-10): NO RESPONSE
+Error: "No response received, expected at least 4 bytes"
+
+ROOT CAUSE ANALYSIS:
+--------------------
+Modbus devices are not responding because:
+  1. Devices not powered, OR
+  2. RS-485 wiring not connected (A+, B-), OR
+  3. Wrong baud rate on slave devices, OR
+  4. RS-485 converter not working
+
+REQUIRED HARDWARE CHECKS:
+--------------------------
+1. What RS-485 HAT/converter are you using?
+2. Are device power LEDs ON? (N4D3E16, ESP32-A, ESP32-B)
+3. Is RS-485 wiring correct? (A+ and B- connected)
+4. Are slave IDs set correctly? (1, 2, 3)
+5. Are slave baud rates set to 9600?
+
+NEXT STEPS:
+-----------
+Please verify the hardware connections and power, then we can continue troubleshooting.
+
+Web Dashboard: http://192.168.68.109:5000
