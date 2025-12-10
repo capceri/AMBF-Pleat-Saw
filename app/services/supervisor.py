@@ -398,6 +398,9 @@ class Supervisor:
         """START_SPINDLE state: Start blade motor."""
         elapsed = time.monotonic() - self.state_entry_time
 
+        # Keep clamp engaged for entire cycle
+        self.io.set_output('clamp', True)
+
         # Send start command immediately and retry every 0.5s if not running
         # This ensures fast response even if first command fails
         if elapsed < 0.1 or (elapsed % 0.5) < 0.02:
@@ -417,6 +420,9 @@ class Supervisor:
     def _state_feed_fwd(self):
         """FEED_FWD state: Feed forward until Sensor3."""
         elapsed = time.monotonic() - self.state_entry_time
+
+        # Ensure clamp stays engaged while feeding forward
+        self.io.set_output('clamp', True)
 
         # Start feed on entry and retry every 0.5s if command fails
         if elapsed < 0.1 or (elapsed % 0.5) < 0.02:
