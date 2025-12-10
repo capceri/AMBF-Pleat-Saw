@@ -388,9 +388,34 @@ class WebMonitor:
             m3_backstop['offset_mm'] = offset_mm
             m3_backstop['position_mm'] = raw_position_mm + offset_mm
 
+            # Build M2 fixture view with IO-backed limit switches
+            m2_fixture = {
+                'in_motion': False,
+                'at_s2': False,
+                'at_s3': False,
+                'at_s4': False,
+                'fault': False,
+            }
+
+            if m2_status and isinstance(m2_status, dict):
+                m2_fixture['in_motion'] = m2_status.get('in_motion', False)
+                m2_fixture['at_s2'] = m2_status.get('at_s2', False)
+                m2_fixture['at_s3'] = m2_status.get('at_s3', False)
+                m2_fixture['at_s4'] = m2_status.get('at_s4', False)
+                m2_fixture['fault'] = m2_status.get('fault', False)
+
+            if self.io:
+                # Use IO poller inputs if available
+                m2_fixture['at_s2'] = bool(self.io.get_input('sensor2')) if self.io.get_input('sensor2') is not None else m2_fixture['at_s2']
+                m2_fixture['at_s3'] = bool(self.io.get_input('sensor3')) if self.io.get_input('sensor3') is not None else m2_fixture['at_s3']
+                # Optional S4 input if wired/mapped
+                s4_val = self.io.get_input('sensor4') if hasattr(self.io, 'get_input') else None
+                if s4_val is not None:
+                    m2_fixture['at_s4'] = bool(s4_val)
+
             return {
                 'm1_blade': m1_status if m1_status else {'error': 'Not available'},
-                'm2_fixture': m2_status if m2_status else {'error': 'Not available'},
+                'm2_fixture': m2_fixture,
                 'm3_backstop': m3_backstop if m3_backstop else {'error': 'Not available'},
                 'timestamp': time.time(),
             }
@@ -507,20 +532,22 @@ class WebMonitor:
                 # Jog fixture forward - temporarily override S3 to allow manual jog
                 vel = params.get('vel', 50)
                 if self.axis and self.io:
-                    # Temporarily set S3 override to false for manual jog
-                    self.io.set_input_override('sensor3', False)
+                    # Block if forward limit is active
+                    if self.io.get_input('sensor3'):
+                        return {'success': False, 'error': 'Cannot jog forward - at forward limit (S3)'}
                     self.axis.m2_jog_forward(vel)
-                    return {'success': True, 'message': f'M2 jogging forward at {vel} mm/s (S3 override active)'}
+                    return {'success': True, 'message': f'M2 jogging forward at {vel} mm/s'}
                 return {'success': False, 'error': 'Axis gateway not available'}
 
             elif command == 'm2_jog_reverse':
                 # Jog fixture reverse - temporarily override S2 to allow manual jog
                 vel = params.get('vel', 50)
                 if self.axis and self.io:
-                    # Temporarily set S2 override to false for manual jog
-                    self.io.set_input_override('sensor2', False)
+                    # Block if reverse/home limit is active
+                    if self.io.get_input('sensor2'):
+                        return {'success': False, 'error': 'Cannot jog reverse - at reverse limit (S2)'}
                     self.axis.m2_jog_reverse(vel)
-                    return {'success': True, 'message': f'M2 jogging reverse at {vel} mm/s (S2 override active)'}
+                    return {'success': True, 'message': f'M2 jogging reverse at {vel} mm/s'}
                 return {'success': False, 'error': 'Axis gateway not available'}
 
             elif command == 'm2_stop':
