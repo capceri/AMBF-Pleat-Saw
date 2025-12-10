@@ -83,6 +83,9 @@ class WebMonitor:
         self._thread: Optional[threading.Thread] = None
         self._update_thread: Optional[threading.Thread] = None
 
+        # Track manual jog state for limit enforcement
+        self._manual_jog_dir: Optional[str] = None  # 'fwd', 'rev', or None
+
         # Initialization errors for diagnostics
         self.init_errors = []
 
@@ -536,6 +539,7 @@ class WebMonitor:
                     if self.io.get_input('sensor3'):
                         return {'success': False, 'error': 'Cannot jog forward - at forward limit (S3)'}
                     self.axis.m2_jog_forward(vel)
+                    self._manual_jog_dir = 'fwd'
                     return {'success': True, 'message': f'M2 jogging forward at {vel} mm/s'}
                 return {'success': False, 'error': 'Axis gateway not available'}
 
@@ -547,6 +551,7 @@ class WebMonitor:
                     if self.io.get_input('sensor2'):
                         return {'success': False, 'error': 'Cannot jog reverse - at reverse limit (S2)'}
                     self.axis.m2_jog_reverse(vel)
+                    self._manual_jog_dir = 'rev'
                     return {'success': True, 'message': f'M2 jogging reverse at {vel} mm/s'}
                 return {'success': False, 'error': 'Axis gateway not available'}
 
@@ -558,6 +563,7 @@ class WebMonitor:
                     if self.io:
                         self.io.set_input_override('sensor2', None)
                         self.io.set_input_override('sensor3', None)
+                    self._manual_jog_dir = None
                     return {'success': True, 'message': 'M2 stopped (overrides cleared)'}
                 return {'success': False, 'error': 'Axis gateway not available'}
 
@@ -664,6 +670,18 @@ class WebMonitor:
         while self._running:
             try:
                 self._broadcast_update()
+
+                # Enforce manual jog limits: stop if limit switch hit while jogging
+                if self.io and self.axis and self._manual_jog_dir:
+                    if self._manual_jog_dir == 'fwd' and self.io.get_input('sensor3'):
+                        logger.warning("Manual jog forward stopped at S3")
+                        self.axis.m2_stop()
+                        self._manual_jog_dir = None
+                    elif self._manual_jog_dir == 'rev' and self.io.get_input('sensor2'):
+                        logger.warning("Manual jog reverse stopped at S2")
+                        self.axis.m2_stop()
+                        self._manual_jog_dir = None
+
                 time.sleep(self.update_interval)
             except Exception as e:
                 logger.error(f"Error in update loop: {e}")
