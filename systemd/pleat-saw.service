@@ -1,0 +1,23 @@
+[Unit]
+Description=Pleat Saw Controller
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/pleat_saw/app
+ExecStart=/home/pi/pleat_saw/venv/bin/python3 /home/pi/pleat_saw/app/main.py
+Restart=always
+RestartSec=10
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/home/pi/pleat_saw/app
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

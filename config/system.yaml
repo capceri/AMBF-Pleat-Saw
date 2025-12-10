@@ -1,0 +1,99 @@
+# Pleat Saw System Configuration
+# Dual RS485 Channel Setup for Maximum Performance
+
+# RS485 Channel 0: I/O Module (slow devices)
+rs485_io:
+  port: /dev/ttySC0        # Waveshare HAT Channel 0
+  baud: 9600               # N4D3E16 fixed baud rate
+  parity: N
+  stop_bits: 1
+  data_bits: 8
+  timeout_s: 0.05          # Per-transaction timeout
+  retry_count: 2           # Number of retries on error
+  connection_timeout_s: 10 # Initial connection timeout
+
+  ids:
+    io: 1                  # N4D3E16 I/O module
+
+# RS485 Channel 1: Motor Controllers (high speed)
+rs485_motors:
+  port: /dev/ttySC1        # Waveshare HAT Channel 1
+  baud: 115200             # High speed for ESP32s (12x faster!)
+  parity: N
+  stop_bits: 1
+  data_bits: 8
+  timeout_s: 0.02          # Faster timeout for 115200 baud
+  retry_count: 2           # Number of retries on error
+  connection_timeout_s: 10 # Initial connection timeout
+
+  ids:
+    esp32a: 2              # ESP32-A (blade + fixture motors)
+    esp32b: 3              # ESP32-B (backstop motor)
+
+nextion:
+  port: /dev/ttyAMA0       # Pi UART0 (GPIO14/15)
+  baud: 115200
+  timeout_s: 0.1
+  debounce_ms: 100         # Debounce setpoint changes from HMI
+
+safety:
+  # Emergency stop input (IN16) - requires manual reset after restore
+  estop_input_bit_index: 15    # IN16 is bit15 (0-based) at 0x00C0
+  estop_active_means_ready: true # true = active (1) means safe to run
+
+  # Light curtain pause input (IN15) - automatic resume when restored
+  pause_input_bit_index: 14    # IN15 is bit14 (0-based) at 0x00C0
+  pause_active_means_ok: true  # true = active (1) means OK to run, inactive = PAUSE
+
+  # Category 0 stop behavior when safety drops (ESTOP)
+  category0_outputs_safe:
+    clamp: false           # Clamp OFF
+    air_jet: false         # Air OFF
+    green_solid: false
+    green_flash: false
+
+  # Pause behavior - outputs remain in current state
+  pause_stop_motors: true      # Stop all motors during pause
+  pause_preserve_outputs: true # Keep outputs in current state during pause
+
+  require_manual_reset: true  # Must send RESET_ALARMS after ESTOP restored
+  watchdog_timeout_s: 1.0     # Max time between safety checks
+
+logging:
+  level: INFO              # DEBUG, INFO, WARNING, ERROR
+  log_dir: /var/log/pleat_saw
+  max_bytes: 10485760      # 10 MB per log file
+  backup_count: 5          # Keep 5 rotated logs
+  console_output: true
+
+services:
+  io_poller:
+    poll_rate_hz: 50       # Input polling frequency (I/O on dedicated 9600 channel)
+    enabled: true
+
+  axis_gateway:
+    heartbeat_check_s: 2.0 # Check ESP heartbeat every 2s
+    enabled: true
+
+  nextion_bridge:
+    update_rate_hz: 10     # HMI update frequency
+    enabled: true
+
+  supervisor:
+    loop_rate_hz: 100      # State machine loop rate (motors on 115200 channel!)
+    enabled: true
+
+  logger:
+    enabled: true
+
+  web_monitor:
+    enabled: true
+    port: 5000             # Web server port
+    host: 0.0.0.0          # Bind to all interfaces (accessible from network)
+    update_rate_hz: 10     # Real-time update frequency
+    require_auth: false    # Enable basic authentication (future)
+    debug: false           # Flask debug mode
+
+# Development/testing modes
+dry_run: false             # true = mock Modbus for bench testing
+simulate_sensors: false    # true = auto-trigger sensors in dry-run

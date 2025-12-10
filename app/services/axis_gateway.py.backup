@@ -1,0 +1,500 @@
+"""
+Axis gateway service for ESP32 motor controllers.
+Provides high-level motion control interface over Modbus RTU.
+"""
+
+import logging
+import time
+import threading
+from typing import Optional, Dict, Tuple
+from enum import IntEnum
+from services.modbus_master import ModbusMaster
+from utils.units import mm_to_modbus, modbus_to_mm, mm_s_to_modbus, modbus_to_mm_s
+
+
+logger = logging.getLogger(__name__)
+
+
+# ESP32-A (Blade + Fixture) Register Map
+class ESP32A_Reg(IntEnum):
+    # M1 Blade
+    M1_CMD = 0x0100
+    M1_RPM = 0x0101
+    M1_STATUS = 0x0102
+    M1_RAMP_MS = 0x0103
+
+    # M2 Fixture
+    M2_CMD = 0x0120
+    M2_VEL_MM_S_x1000 = 0x0121
+    M2_ACCEL_MM_S2 = 0x0122
+    M2_STATUS = 0x0123
+    M2_POS_MM_x1000_LOW = 0x0124
+    M2_POS_MM_x1000_HIGH = 0x0125
+    M2_JOG_VEL_MM_S_x1000 = 0x0126
+
+    # Common
+    FW_VERSION = 0x0140
+    HEARTBEAT = 0x0141
+    LAST_FAULT_CODE = 0x0142
+
+
+# ESP32-B (Backstop) Register Map
+class ESP32B_Reg(IntEnum):
+    M3_CMD = 0x0200
+    M3_TARGET_MM_x1000_LOW = 0x0201
+    M3_TARGET_MM_x1000_HIGH = 0x0202
+    M3_VEL_MM_S_x1000 = 0x0203
+    M3_ACCEL_MM_S2 = 0x0204
+    M3_STATUS = 0x0205
+    M3_POS_MM_x1000_LOW = 0x0206
+    M3_POS_MM_x1000_HIGH = 0x0207
+    M3_PID_P_x1000 = 0x0208
+    M3_PID_I_x1000 = 0x0209
+    M3_PID_D_x1000 = 0x020A
+    M3_STEPS_PER_MM_x1000 = 0x0210
+
+
+# Command codes
+class M1_Cmd(IntEnum):
+    STOP = 0
+    RUN = 1
+    CLEAR_FAULT = 2
+
+
+class M2_Cmd(IntEnum):
+    STOP = 0
+    FWD_UNTIL_S3 = 1
+    REV_UNTIL_S2 = 2
+    JOG_FWD = 3
+    JOG_REV = 4
+    CLEAR_FAULT = 5
+
+
+class M3_Cmd(IntEnum):
+    STOP = 0
+    GOTO = 1
+    HOME = 2
+    JOG_FWD = 3
+    JOG_REV = 4
+    CLEAR_FAULT = 5
+
+
+class AxisGateway:
+    """
+    High-level gateway for motor control via ESP32 Modbus slaves.
+    Handles M1 (blade), M2 (fixture), and M3 (backstop).
+    """
+
+    def __init__(
+        self,
+        modbus: ModbusMaster,
+        esp32a_id: int,
+        esp32b_id: int,
+        heartbeat_check_s: float = 2.0
+    ):
+        """
+        Initialize axis gateway.
+
+        Args:
+            modbus: ModbusMaster instance
+            esp32a_id: ESP32-A slave ID (blade + fixture)
+            esp32b_id: ESP32-B slave ID (backstop)
+            heartbeat_check_s: Heartbeat monitoring interval
+        """
+        self.modbus = modbus
+        self.esp32a_id = esp32a_id
+        self.esp32b_id = esp32b_id
+        self.heartbeat_check_s = heartbeat_check_s
+
+        # Cached status values
+        self.m1_status = 0
+        self.m2_status = 0
+        self.m3_status = 0
+
+        self.m2_position_mm = 0.0
+        self.m3_position_mm = 0.0
+
+        # Heartbeat tracking
+        self._last_heartbeat_a = 0
+        self._last_heartbeat_b = 0
+        self._last_heartbeat_check = time.monotonic()
+
+        # Threading
+        self._running = False
+        self._thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
+
+    def start(self):
+        """Start background heartbeat monitoring."""
+        if self._running:
+            return
+
+        self._running = True
+        self._thread = threading.Thread(target=self._monitor_loop, daemon=True)
+        self._thread.start()
+        logger.info("AxisGateway started")
+
+    def stop(self):
+        """Stop background monitoring."""
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=2.0)
+        logger.info("AxisGateway stopped")
+
+    def _monitor_loop(self):
+        """Background loop for heartbeat monitoring."""
+        while self._running:
+            try:
+                now = time.monotonic()
+
+                if now - self._last_heartbeat_check >= self.heartbeat_check_s:
+                    self._check_heartbeats()
+                    self._last_heartbeat_check = now
+
+                time.sleep(0.1)
+
+            except Exception as e:
+                logger.error(f"AxisGateway monitor error: {e}")
+
+    def _check_heartbeats(self):
+        """Check ESP32 heartbeat counters."""
+        # ESP32-A heartbeat
+        result = self.modbus.read_holding_registers(
+            self.esp32a_id, ESP32A_Reg.HEARTBEAT, count=1
+        )
+        if result:
+            heartbeat = result[0]
+            if heartbeat == self._last_heartbeat_a:
+                logger.warning(f"ESP32-A heartbeat stalled (slave {self.esp32a_id})")
+            self._last_heartbeat_a = heartbeat
+
+        # ESP32-B heartbeat
+        result = self.modbus.read_holding_registers(
+            self.esp32b_id, ESP32B_Reg.M3_CMD, count=1  # Use any register as heartbeat check
+        )
+        if result:
+            # For ESP32-B, we just check communication, no dedicated heartbeat register in minimal map
+            pass
+
+    # ========== M1 Blade Motor ==========
+
+    def m1_start(self, rpm: int, ramp_ms: int = 200) -> bool:
+        """
+        Start blade motor.
+
+        Args:
+            rpm: Target RPM (500-6000)
+            ramp_ms: Acceleration ramp time in milliseconds
+
+        Returns:
+            True if command sent successfully
+        """
+        logger.info(f"M1 START: {rpm} RPM, ramp {ramp_ms} ms")
+
+        # Write RPM and ramp
+        if not self.modbus.write_register(self.esp32a_id, ESP32A_Reg.M1_RPM, rpm):
+            return False
+
+        if not self.modbus.write_register(self.esp32a_id, ESP32A_Reg.M1_RAMP_MS, ramp_ms):
+            return False
+
+        # Send RUN command
+        return self.modbus.write_register(self.esp32a_id, ESP32A_Reg.M1_CMD, M1_Cmd.RUN)
+
+    def m1_stop(self) -> bool:
+        """Stop blade motor."""
+        logger.info("M1 STOP")
+        return self.modbus.write_register(self.esp32a_id, ESP32A_Reg.M1_CMD, M1_Cmd.STOP)
+
+    def m1_clear_fault(self) -> bool:
+        """Clear M1 fault."""
+        logger.info("M1 CLEAR_FAULT")
+        return self.modbus.write_register(self.esp32a_id, ESP32A_Reg.M1_CMD, M1_Cmd.CLEAR_FAULT)
+
+    def m1_get_status(self) -> Optional[Dict[str, bool]]:
+        """
+        Get M1 status flags.
+
+        Returns:
+            Dictionary with keys: running, fault, ready
+        """
+        result = self.modbus.read_holding_registers(
+            self.esp32a_id, ESP32A_Reg.M1_STATUS, count=1
+        )
+
+        if result is None:
+            return None
+
+        status = result[0]
+        with self._lock:
+            self.m1_status = status
+
+        return {
+            'running': bool(status & 0x01),
+            'fault': bool(status & 0x02),
+            'ready': bool(status & 0x04),
+        }
+
+    # ========== M2 Fixture Motor ==========
+
+    def m2_set_velocity(self, vel_mm_s: float, accel_mm_s2: float) -> bool:
+        """
+        Set M2 velocity and acceleration parameters.
+
+        Args:
+            vel_mm_s: Velocity in mm/s
+            accel_mm_s2: Acceleration in mm/s^2
+
+        Returns:
+            True if successful
+        """
+        # M2 uses ×10 scaling (not ×1000) to avoid 16-bit overflow at high speeds
+        # Max velocity: 6553.5 mm/s (65535 / 10)
+        vel_modbus = int(round(vel_mm_s * 10.0))
+        accel_int = int(accel_mm_s2)
+
+        logger.info(f"M2 velocity: {vel_mm_s} mm/s → Modbus: {vel_modbus} (×10 scaling)")
+
+        success = self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_VEL_MM_S_x1000, vel_modbus
+        )
+
+        success &= self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_ACCEL_MM_S2, accel_int
+        )
+
+        return success
+
+    def m2_feed_forward(self) -> bool:
+        """Command M2 to feed forward until Sensor3."""
+        logger.info("M2 FEED_FWD (until S3)")
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.FWD_UNTIL_S3
+        )
+
+    def m2_feed_reverse(self) -> bool:
+        """Command M2 to feed reverse until Sensor2."""
+        logger.info("M2 FEED_REV (until S2)")
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.REV_UNTIL_S2
+        )
+
+    def m2_stop(self) -> bool:
+        """Stop M2 fixture motor."""
+        logger.info("M2 STOP")
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.STOP
+        )
+
+    def m2_home(self, vel_mm_s: float, accel_mm_s2: float) -> bool:
+        """Command M2 to home (return to S2 sensor)."""
+        logger.info(f"M2 HOME (return to S2) @ {vel_mm_s} mm/s")
+
+        # Set velocity before homing
+        if not self.m2_set_velocity(vel_mm_s, accel_mm_s2):
+            return False
+
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.REV_UNTIL_S2
+        )
+
+    def m2_jog_forward(self, vel_mm_s: float) -> bool:
+        """Jog M2 forward at specified velocity."""
+        logger.info(f"M2 JOG_FWD: {vel_mm_s} mm/s")
+        vel_modbus = mm_s_to_modbus(vel_mm_s)
+
+        if not self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_JOG_VEL_MM_S_x1000, vel_modbus
+        ):
+            return False
+
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.JOG_FWD
+        )
+
+    def m2_jog_reverse(self, vel_mm_s: float) -> bool:
+        """Jog M2 reverse at specified velocity."""
+        logger.info(f"M2 JOG_REV: {vel_mm_s} mm/s")
+        vel_modbus = mm_s_to_modbus(vel_mm_s)
+
+        if not self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_JOG_VEL_MM_S_x1000, vel_modbus
+        ):
+            return False
+
+        return self.modbus.write_register(
+            self.esp32a_id, ESP32A_Reg.M2_CMD, M2_Cmd.JOG_REV
+        )
+
+    def m2_get_status(self) -> Optional[Dict[str, bool]]:
+        """
+        Get M2 status flags.
+
+        Returns:
+            Dictionary with keys: in_motion, at_s2, at_s3, fault, homed
+        """
+        result = self.modbus.read_holding_registers(
+            self.esp32a_id, ESP32A_Reg.M2_STATUS, count=1
+        )
+
+        if result is None:
+            return None
+
+        status = result[0]
+        with self._lock:
+            self.m2_status = status
+
+        return {
+            'in_motion': bool(status & 0x01),
+            'at_s2': bool(status & 0x02),
+            'at_s3': bool(status & 0x04),
+            'fault': bool(status & 0x08),
+            'homed': bool(status & 0x10),
+        }
+
+    # ========== M3 Backstop Motor ==========
+
+    def m3_goto(self, target_mm: float, vel_mm_s: float, accel_mm_s2: float) -> bool:
+        """
+        Command M3 to move to target position.
+
+        Args:
+            target_mm: Target position in mm
+            vel_mm_s: Velocity in mm/s
+            accel_mm_s2: Acceleration in mm/s^2
+
+        Returns:
+            True if successful
+        """
+        logger.info(f"M3 GOTO: {target_mm} mm @ {vel_mm_s} mm/s")
+
+        # Set velocity and acceleration
+        vel_modbus = mm_s_to_modbus(vel_mm_s)
+        accel_int = int(accel_mm_s2)
+
+        if not self.modbus.write_register(
+            self.esp32b_id, ESP32B_Reg.M3_VEL_MM_S_x1000, vel_modbus
+        ):
+            return False
+
+        if not self.modbus.write_register(
+            self.esp32b_id, ESP32B_Reg.M3_ACCEL_MM_S2, accel_int
+        ):
+            return False
+
+        # Write target position (32-bit)
+        target_modbus = mm_to_modbus(target_mm)
+        if not self.modbus.write_int32(
+            self.esp32b_id, ESP32B_Reg.M3_TARGET_MM_x1000_LOW, target_modbus
+        ):
+            return False
+
+        # Send GOTO command
+        return self.modbus.write_register(
+            self.esp32b_id, ESP32B_Reg.M3_CMD, M3_Cmd.GOTO
+        )
+
+    def m3_home(self) -> bool:
+        """Command M3 to home."""
+        logger.info("M3 HOME")
+        return self.modbus.write_register(
+            self.esp32b_id, ESP32B_Reg.M3_CMD, M3_Cmd.HOME
+        )
+
+    def m3_stop(self) -> bool:
+        """Stop M3 backstop motor."""
+        logger.info("M3 STOP")
+        return self.modbus.write_register(
+            self.esp32b_id, ESP32B_Reg.M3_CMD, M3_Cmd.STOP
+        )
+
+    def m3_get_position(self) -> Optional[float]:
+        """
+        Get M3 current position.
+
+        Returns:
+            Position in mm, or None on error
+        """
+        pos_modbus = self.modbus.read_int32(
+            self.esp32b_id, ESP32B_Reg.M3_POS_MM_x1000_LOW
+        )
+
+        if pos_modbus is None:
+            return None
+
+        pos_mm = modbus_to_mm(pos_modbus)
+
+        with self._lock:
+            self.m3_position_mm = pos_mm
+
+        return pos_mm
+
+    def m3_get_status(self) -> Optional[Dict[str, bool]]:
+        """
+        Get M3 status flags.
+
+        Returns:
+            Dictionary with keys: in_motion, homed, at_target, fault, limit_min, limit_max
+        """
+        result = self.modbus.read_holding_registers(
+            self.esp32b_id, ESP32B_Reg.M3_STATUS, count=1
+        )
+
+        if result is None:
+            return None
+
+        status = result[0]
+        with self._lock:
+            self.m3_status = status
+
+        return {
+            'in_motion': bool(status & 0x01),
+            'homed': bool(status & 0x02),
+            'at_target': bool(status & 0x04),
+            'fault': bool(status & 0x08),
+            'limit_min': bool(status & 0x10),
+            'limit_max': bool(status & 0x20),
+        }
+
+    def m3_set_pid_gains(self, p: float, i: float, d: float) -> bool:
+        """
+        Set M3 PID gains.
+
+        Args:
+            p, i, d: PID gains (will be scaled × 1000 for Modbus)
+
+        Returns:
+            True if successful
+        """
+        logger.info(f"M3 PID: P={p}, I={i}, D={d}")
+
+        p_modbus = int(p * 1000)
+        i_modbus = int(i * 1000)
+        d_modbus = int(d * 1000)
+
+        success = self.modbus.write_register(self.esp32b_id, ESP32B_Reg.M3_PID_P_x1000, p_modbus)
+        success &= self.modbus.write_register(self.esp32b_id, ESP32B_Reg.M3_PID_I_x1000, i_modbus)
+        success &= self.modbus.write_register(self.esp32b_id, ESP32B_Reg.M3_PID_D_x1000, d_modbus)
+
+        return success
+
+    # ========== Emergency Stop ==========
+
+    def stop_all_motors(self):
+        """Stop all motors gracefully (for pause)."""
+        logger.info("STOPPING ALL MOTORS (PAUSE)")
+
+        self.m1_stop()
+        self.m2_stop()
+        self.m3_stop()
+
+    def emergency_stop_all(self):
+        """Emergency stop all motors (Category 0)."""
+        logger.warning("EMERGENCY STOP ALL MOTORS")
+
+        self.m1_stop()
+        self.m2_stop()
+        self.m3_stop()
+
+    def __repr__(self) -> str:
+        return f"<AxisGateway esp32a={self.esp32a_id}, esp32b={self.esp32b_id}>"

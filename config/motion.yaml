@@ -1,0 +1,78 @@
+# Pleat Saw Motion Configuration
+# All linear units in millimeters, rotational in RPM
+# Fixed-point scaling (mm × 1000) used over Modbus
+
+m1_blade:
+  # Blade spindle motor (servo step/dir on ESP32-A)
+  rpm_min: 5
+  rpm_max: 3500
+  rpm_default: 700          # Changed from 3500 to 700 RPM (safe startup speed)
+  ramp_ms: 200              # Acceleration ramp time
+  timeout_start_s: 3.0      # Max time to reach RUNNING status
+
+m2_fixture:
+  # Fixture feed motor (servo step/dir on ESP32-A)
+  # NOTE: Velocities are multiplied by 50x in axis_gateway before sending to ESP32
+  speed_mm_s_min: 10.0
+  speed_mm_s_max: 400.0
+  accel_mm_s2_min: 100.0
+  accel_mm_s2_max: 5000.0
+
+  default_speed_mm_s: 80.0
+  default_speed_rev_mm_s: 100.0
+  default_accel_mm_s2: 2000.0
+
+  # Process timeouts (safety)
+  timeout_fwd_s: 20.0       # Max time to reach Sensor3 (increased from 5s)
+  timeout_rev_s: 20.0       # Max time to reach Sensor2 (increased from 5s)
+
+  # Optional jog parameters
+  jog_speed_mm_s: 50.0
+  jog_accel_mm_s2: 1000.0
+
+m3_backstop:
+  # Backstop positioning motor with encoder (ESP32-B)
+  steps_per_mm: 400.0       # Motor + gearing + leadscrew
+
+  default_speed_mm_s: 50.0
+  default_accel_mm_s2: 1000.0
+
+  home_present: true        # System has homing capability
+  home_speed_mm_s: 20.0
+  home_timeout_s: 30.0
+
+  # Soft limits (enforced by Pi supervisor)
+  soft_min_mm: 0.0
+  soft_max_mm: 1000.0
+
+  # Position tolerance
+  position_tolerance_mm: 0.010   # ±10 microns
+
+  # PID gains (default; can be tuned via HMI or Modbus)
+  pid:
+    p: 1.000
+    i: 0.000
+    d: 0.000
+
+  # Static check (optional): ensure backstop settled before cycle
+  static_check_enabled: false
+  static_vel_thresh_mm_s: 0.1
+  static_hold_time_ms: 500
+
+# Process cycle timing
+cycle:
+  dwell_after_s3_s: 1.5     # Pause at forward position before reversing
+  air_jet_s: 1.0            # Air jet pulse duration
+  saw_spindown_s: 0.5       # Delay after M1_CMD=STOP before next step
+  clamp_confirm_s: 0.1      # Optional: delay after clamp ON
+
+# HMI display settings
+hmi:
+  position_decimal_places: 3   # Display 0.000 inches
+  speed_decimal_places: 1
+  update_rate_hz: 10           # Push updates to HMI at 10 Hz
+
+# Engineering limits (enforced by supervisor)
+limits:
+  max_cycle_time_s: 30.0    # Abort if cycle exceeds this
+  max_alarm_count: 100      # Log rotation / alarm history size

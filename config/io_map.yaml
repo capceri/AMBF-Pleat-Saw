@@ -1,0 +1,40 @@
+# Pleat Saw I/O Map
+# N4D3E16 module input/output bit assignments
+# Bit indices are 0-based (IN1=bit0, IN16=bit15)
+
+inputs:
+  # Physical inputs (NPN, low=active in hardware)
+  # Modbus 0x00C0 bit-packed register
+  start: 0          # IN1 - Start button
+  sensor2: 1        # IN2 - Fixture reverse/home sensor
+  sensor3: 2        # IN3 - Fixture forward sensor
+  light_curtain: 14 # IN15 - Light curtain (ACTIVE=OK to run, INACTIVE=PAUSE)
+  safety: 15        # IN16 - Safety circuit (ACTIVE=READY, INACTIVE=ESTOP)
+
+  # Spare inputs for future use
+  # spare1: 3       # IN4
+  # spare2: 4       # IN5
+  # ...
+
+outputs:
+  # Physical outputs (relay/solid-state)
+  # Modbus 0x0070 bit-packed register
+  clamp: 0          # CH1 - Pneumatic clamp (Valve 1)
+  air_jet: 1        # CH2 - Chute clear / air jet solenoid (Valve 2)
+  green_solid: 2    # CH3 - Green solid indicator
+  green_flash: 3    # CH4 - Green flashing indicator
+
+  # Spare outputs for future use
+  # spare1: 4       # CH5
+  # spare2: 5       # CH6
+  # ...
+
+# N4D3E16 Modbus register map reference:
+# - All inputs bit-packed:  0x00C0 (read holding register)
+# - Per-input status:       0x0081..0x0090 (IN1..IN16)
+# - All outputs bit-packed: 0x0070 (write holding register)
+# - Per-output control:     0x0001..0x0010 (CH1..CH16)
+
+# Logic conventions:
+# - Inputs: bit=1 means active (module inverts NPN low to logic high)
+# - Outputs: bit=1 means channel ON/open

@@ -1,0 +1,66 @@
+Pleat Saw Controller - Installation Summary
+============================================
+
+Installation Date: Wed 22 Oct 10:10:14 BST 2025
+Installation Path: /home/ambf1/pleat_saw
+Python Version: Python 3.13.5
+User: ambf1
+Group: ambf1
+
+Directory Structure:
+--------------------
+/home/ambf1/pleat_saw/
+├── app/                  # Python application
+│   ├── main.py          # Entry point
+│   ├── services/        # Background services
+│   ├── utils/           # Utility modules
+│   └── tests/           # Unit tests
+├── config/              # YAML configuration files
+├── logs/                # Application logs
+├── data/                # Runtime data
+├── venv/                # Python virtual environment
+└── systemd/             # Systemd service files
+
+Service Management:
+-------------------
+Start service:     sudo systemctl start pleat-saw
+Stop service:      sudo systemctl stop pleat-saw
+Restart service:   sudo systemctl restart pleat-saw
+Service status:    sudo systemctl status pleat-saw
+View logs:         sudo journalctl -u pleat-saw -f
+
+Configuration Files:
+--------------------
+System config:     /home/ambf1/pleat_saw/config/system.yaml
+I/O mapping:       /home/ambf1/pleat_saw/config/io_map.yaml
+Motion params:     /home/ambf1/pleat_saw/config/motion.yaml
+
+Log Files:
+----------
+Application log:   /home/ambf1/pleat_saw/logs/pleat_saw.log
+Event log (CSV):   /home/ambf1/pleat_saw/logs/events.csv
+System journal:    sudo journalctl -u pleat-saw
+
+Testing:
+--------
+Run unit tests:    /home/ambf1/pleat_saw/venv/bin/pytest /home/ambf1/pleat_saw/app/tests/ -v
+Dry-run mode:      /home/ambf1/pleat_saw/venv/bin/python /home/ambf1/pleat_saw/app/main.py --dry-run
+
+Next Steps:
+-----------
+1. Review and edit configuration files in /home/ambf1/pleat_saw/config/
+2. Configure RS-485 serial port in config/system.yaml
+3. Configure Nextion HMI serial port in config/system.yaml
+4. Verify I/O mapping in config/io_map.yaml
+5. Tune motion parameters in config/motion.yaml
+6. Connect hardware (RS-485 bus, Nextion HMI)
+7. Start the service: sudo systemctl start pleat-saw
+8. Follow commissioning checklist: /home/ambf1/pleat_saw/docs/commissioning_checklist.md
+
+Support:
+--------
+Documentation: /home/ambf1/pleat_saw/docs/
+ESP32 Firmware: Upload from firmware/ directory using PlatformIO
+Nextion HMI:    See NEXTION_PROMPT.md for HMI programming guide
+
+For technical support, contact the controls engineering team.

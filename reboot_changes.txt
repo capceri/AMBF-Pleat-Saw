@@ -1,0 +1,42 @@
+===============================================================================
+WAVESHARE RS485 HAT CONFIGURATION APPLIED
+===============================================================================
+Date: 2025-10-23
+
+CHANGES MADE TO /boot/firmware/config.txt:
+-------------------------------------------
+1. ✓ Enabled SPI: dtparam=spi=on
+2. ✓ Enabled I2C: dtparam=i2c_arm=on  
+3. ✓ Added Waveshare HAT overlay: dtoverlay=sc16is752-spi1,int_pin=24
+4. ✓ Disabled Bluetooth: dtoverlay=disable-bt
+
+SERVICES DISABLED:
+------------------
+✓ bluetooth.service (disabled)
+
+EXPECTED SERIAL DEVICES AFTER REBOOT:
+--------------------------------------
+/dev/ttySC0 - Channel 0 of Waveshare HAT (for RS-485 Modbus)
+/dev/ttySC1 - Channel 1 of Waveshare HAT (spare RS-485 channel)
+/dev/ttyAMA0 - Primary UART (freed from Bluetooth, for Nextion HMI)
+/dev/ttyS0 - Mini UART (will remain available)
+
+DEVICE ASSIGNMENTS:
+-------------------
+RS-485 Modbus (N4D3E16 + ESP32s): /dev/ttySC0
+Nextion HMI: /dev/ttyAMA0
+
+NEXT STEPS:
+-----------
+1. REBOOT the Raspberry Pi
+2. After reboot, verify devices exist:
+   ls -l /dev/ttySC* /dev/ttyAMA0
+3. Update pleat_saw configuration to use correct ports
+4. Test Modbus communication
+5. Test Nextion HMI connection
+
+REBOOT COMMAND:
+---------------
+sudo reboot
+
+===============================================================================
