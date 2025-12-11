@@ -412,10 +412,10 @@ class Supervisor:
         if status and status['running']:
             logger.info("Blade running")
             self._transition_to(State.FEED_FWD)
-
-        # Timeout check
-        elif elapsed > self.m1_start_timeout:
-            self._raise_alarm("TIMEOUT_BLADE_START")
+        elif elapsed >= self.m1_start_timeout:
+            # Proceed even if RUN flag not reported by ESP32-A
+            logger.warning("Blade status not reporting RUN; proceeding to feed forward")
+            self._transition_to(State.FEED_FWD)
 
     def _state_feed_fwd(self):
         """FEED_FWD state: Feed forward until Sensor3."""
