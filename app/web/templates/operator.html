@@ -255,13 +255,63 @@
             background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
             color: #000;
         }
-        .numpad-btn.clear {
-            background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
-            color: #000;
-        }
-    </style>
-</head>
-<body>
+        .numpad-btn.clear {
+            background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+            color: #000;
+        }
+
+        /* Reset Confirmation Overlay */
+        #reset-confirm-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+        }
+        #reset-confirm-container {
+            background-color: #2d3748;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 520px;
+            width: 90%;
+            border: 3px solid #000;
+        }
+        #reset-confirm-message {
+            color: #fff;
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+        #reset-confirm-ack {
+            width: 100%;
+            height: 90px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border: 3px solid #000;
+            border-radius: 10px;
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #000;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        #reset-confirm-ack:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
     <div class="header">
         <h1>Automated Pleat Pack Saw</h1>
     </div>
@@ -297,10 +347,10 @@
         <img src="{{ url_for('static', filename='images/afm_logo.png') }}" alt="American Filter Manufacturing" style="height: 60px; max-width: 90%; object-fit: contain;">
     </div>
 
-    <!-- Numpad Overlay -->
-    <div id="numpad-overlay">
-        <div id="numpad-container">
-            <div id="numpad-display">0</div>
+    <!-- Numpad Overlay -->
+    <div id="numpad-overlay">
+        <div id="numpad-container">
+            <div id="numpad-display">0</div>
             <div id="numpad-grid">
                 <div class="numpad-btn" data-num="7">7</div>
                 <div class="numpad-btn" data-num="8">8</div>
@@ -316,13 +366,21 @@
                 <div class="numpad-btn" data-num=".">.</div>
                 <div class="numpad-btn enter" id="numpad-enter">ENT</div>
             </div>
-        </div>
-    </div>
-
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const socket = io();
+        </div>
+    </div>
+
+    <!-- Reset Confirmation Overlay -->
+    <div id="reset-confirm-overlay">
+        <div id="reset-confirm-container">
+            <div id="reset-confirm-message">WARNING: M2 drive will move</div>
+            <div id="reset-confirm-ack">ACK</div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const socket = io();
 
             // Elements
             const targetDisplay = document.getElementById('target-display');
@@ -334,12 +392,16 @@
             const statusMessage = document.getElementById('status-message');
 
             // Numpad elements
-            const numpadOverlay = document.getElementById('numpad-overlay');
-            const numpadDisplay = document.getElementById('numpad-display');
-            const numpadButtons = document.querySelectorAll('.numpad-btn[data-num]');
-            const numpadClear = document.getElementById('numpad-clear');
-            const numpadEnter = document.getElementById('numpad-enter');
-
+            const numpadOverlay = document.getElementById('numpad-overlay');
+            const numpadDisplay = document.getElementById('numpad-display');
+            const numpadButtons = document.querySelectorAll('.numpad-btn[data-num]');
+            const numpadClear = document.getElementById('numpad-clear');
+            const numpadEnter = document.getElementById('numpad-enter');
+
+            // Reset confirmation elements
+            const resetConfirmOverlay = document.getElementById('reset-confirm-overlay');
+            const resetConfirmAck = document.getElementById('reset-confirm-ack');
+
             let numpadValue = '0';
             let currentState = 'STARTUP';
             let targetValue = 0;
@@ -437,16 +499,27 @@
 
             goButton.addEventListener('click', sendBackstopGoto);
 
-            // Reset Button - reset alarms
-            resetButton.addEventListener('click', () => {
-                console.log('Reset button pressed');
-                sendCommand('reset_alarms');
-            });
-
-            // Home Button
-            homeButton.addEventListener('click', () => {
-                console.log('Home button pressed');
-                sendCommand('m3_home');
+            // Reset Button - confirm before resetting alarms and homing M2
+            resetButton.addEventListener('click', () => {
+                console.log('Reset button pressed - showing confirmation');
+                resetConfirmOverlay.style.display = 'flex';
+            });
+
+            resetConfirmAck.addEventListener('click', () => {
+                resetConfirmOverlay.style.display = 'none';
+                console.log('Reset acknowledged - resetting alarms and homing M2');
+
+                // Reset alarms first
+                sendCommand('reset_alarms');
+
+                // Home M2 using same command as "Feed REV (Cont.)" in engineering dashboard
+                sendCommand('m2_jog_reverse', { vel: 50 });
+            });
+
+            // Home Button
+            homeButton.addEventListener('click', () => {
+                console.log('Home button pressed');
+                sendCommand('m3_home');
             });
 
             // Engineering Button - Navigate to dashboard page
