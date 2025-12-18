@@ -279,13 +279,12 @@
             <div class="value" id="actual-display">--.-</div>
         </div>
 
-        <!-- GO Button Container -->
-        <div class="go-button-container">
-            <div class="go-button" id="go-button">GO</div>
-            <div class="status-message" id="status-message">READY</div>
-            <div class="reset-button" id="reset-button">RST</div>
-            <div class="ok-button" id="ok-button">OK</div>
-        </div>
+        <!-- GO Button Container -->
+        <div class="go-button-container">
+            <div class="go-button" id="go-button">GO</div>
+            <div class="status-message" id="status-message">READY</div>
+            <div class="reset-button" id="reset-button">RST</div>
+        </div>
 
         <!-- Bottom Navigation Buttons -->
         <div class="bottom-buttons">
@@ -326,14 +325,13 @@
             const socket = io();
 
             // Elements
-            const targetDisplay = document.getElementById('target-display');
-            const actualDisplay = document.getElementById('actual-display');
-            const goButton = document.getElementById('go-button');
-            const okButton = document.getElementById('ok-button');
-            const resetButton = document.getElementById('reset-button');
-            const engButton = document.getElementById('eng-button');
-            const homeButton = document.getElementById('home-button');
-            const statusMessage = document.getElementById('status-message');
+            const targetDisplay = document.getElementById('target-display');
+            const actualDisplay = document.getElementById('actual-display');
+            const goButton = document.getElementById('go-button');
+            const resetButton = document.getElementById('reset-button');
+            const engButton = document.getElementById('eng-button');
+            const homeButton = document.getElementById('home-button');
+            const statusMessage = document.getElementById('status-message');
 
             // Numpad elements
             const numpadOverlay = document.getElementById('numpad-overlay');
@@ -437,10 +435,7 @@
                 sendCommand('m3_goto', { position: positionMm });
             };
 
-            goButton.addEventListener('click', sendBackstopGoto);
-
-            // OK Button - same action as GO for redundancy
-            okButton.addEventListener('click', sendBackstopGoto);
+            goButton.addEventListener('click', sendBackstopGoto);
 
             // Reset Button - reset alarms
             resetButton.addEventListener('click', () => {
