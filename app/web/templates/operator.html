@@ -464,18 +464,6 @@
                     const positionInches = getM3PositionInches(data.motors.m3_backstop);
                     actualDisplay.textContent = formatInches(positionInches);
                 }
-
-                // Update target from config or nextion data
-                const targetMmCandidate =
-                    (data.config && toNumber(data.config.target)) ??
-                    toNumber(data.target) ??
-                    (data.config && toNumber(data.config.target_mm));
-
-                if (numpadOverlay.style.display !== 'flex' && targetMmCandidate !== null) {
-                    const targetInches = mmToInches(targetMmCandidate);
-                    targetValue = targetInches;
-                    targetDisplay.textContent = formatInches(targetInches);
-                }
             });
 
             // Fetch initial status
