@@ -1,260 +1,517 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Automated Pleat Pack Saw</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
-        }
-        body {
-            font-family: Arial, sans-serif;
-            background: linear-gradient(135deg, #c9b037 0%, #9c8929 100%);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            touch-action: manipulation;
-        }
-        .header {
-            text-align: center;
-            padding: 1rem;
-            background-color: rgba(0, 0, 0, 0.2);
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            color: #000;
-            font-weight: bold;
-            margin: 0;
-        }
-        .main-container {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: 2fr 3fr 1fr;
-            gap: 1rem;
-            padding: 1rem;
-        }
-        .display-box {
-            background-color: #ffed4e;
-            border: 3px solid #000;
-            border-radius: 8px;
-            padding: 1.5rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            position: relative;
-        }
-        .display-box h2 {
-            font-size: 1.8rem;
-            color: #000;
-            margin-bottom: 0.5rem;
-            text-align: left;
-            width: 100%;
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            margin: 0;
-        }
-        .display-box .value {
-            font-size: 4rem;
-            font-weight: bold;
-            color: #000;
-            font-family: 'Courier New', monospace;
-            letter-spacing: 0.1rem;
-            cursor: pointer;
-            user-select: none;
-        }
-        .go-button-container {
-            grid-column: 1 / 3;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            background: rgba(0,0,0,0.05);
-        }
-        .go-button {
-            width: 350px;
-            height: 200px;
-            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-            border: 5px solid #000;
-            border-radius: 15px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 6rem;
-            font-weight: bold;
-            color: #000;
-            cursor: pointer;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
-            transition: transform 0.1s, box-shadow 0.1s;
-            user-select: none;
-        }
-        .go-button:active {
-            transform: scale(0.95);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-        .status-message {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 1rem;
-            color: #000;
-            background-color: rgba(255, 255, 255, 0.7);
-            padding: 0.5rem 1rem;
-            border-radius: 5px;
-            max-width: 200px;
-            text-align: center;
-        }
-        .ok-button {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            width: 120px;
-            height: 80px;
-            background-color: #94a3b8;
-            border: 3px solid #000;
-            border-radius: 8px;
-            font-size: 2rem;
-            font-weight: bold;
-            color: #000;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 5;
-        }
-        .ok-button:active {
-            transform: scale(0.95);
-        }
-        .reset-button {
-            position: absolute;
-            bottom: 10px;
-            right: 140px;
-            width: 120px;
-            height: 80px;
-            background-color: #f87171;
-            border: 3px solid #000;
-            border-radius: 8px;
-            font-size: 2rem;
-            font-weight: bold;
-            color: #000;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 5;
-        }
-        .reset-button:active {
-            transform: scale(0.95);
-        }
-        .bottom-buttons {
-            grid-column: 1 / 3;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-        }
-        .nav-button {
-            flex: 1;
-            height: 100px;
-            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-            border: 4px solid #000;
-            border-radius: 10px;
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #000;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-            user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .nav-button:active {
-            transform: scale(0.95);
-        }
-        .footer {
-            background: transparent;
-            text-align: center;
-            padding: 0.8rem;
-            font-size: 1.5rem;
-            font-weight: bold;
-            letter-spacing: 0.05rem;
-        }
-        /* Numpad Overlay */
-        #numpad-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.85);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-        #numpad-container {
-            background-color: #2d3748;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-        }
-        #numpad-display {
-            background-color: #000;
-            color: #4ade80;
-            font-size: 3rem;
-            font-family: 'Courier New', monospace;
-            padding: 1.5rem;
-            margin-bottom: 1.5rem;
-            border-radius: 8px;
-            text-align: right;
-            min-width: 350px;
-            min-height: 70px;
-        }
-        #numpad-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-        }
-        .numpad-btn {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
-            border: 3px solid #1a202c;
-            border-radius: 10px;
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: white;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            transition: transform 0.1s;
-            user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .numpad-btn:active {
-            transform: scale(0.95);
-            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-        }
-        .numpad-btn.enter {
-            grid-column: span 3;
-            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
-            color: #000;
-        }
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <title>Automated Pleat Pack Saw</title>
+
+    <style>
+
+        * {
+
+            margin: 0;
+
+            padding: 0;
+
+            box-sizing: border-box;
+
+            -webkit-tap-highlight-color: transparent;
+
+        }
+
+        body {
+
+            font-family: Arial, sans-serif;
+
+            background: linear-gradient(135deg, #c9b037 0%, #9c8929 100%);
+
+            height: 100vh;
+
+            display: flex;
+
+            flex-direction: column;
+
+            overflow: hidden;
+
+            touch-action: manipulation;
+
+        }
+
+        .header {
+
+            text-align: center;
+
+            padding: 1rem;
+
+            background-color: rgba(0, 0, 0, 0.2);
+
+        }
+
+        .header h1 {
+
+            font-size: 2.5rem;
+
+            color: #000;
+
+            font-weight: bold;
+
+            margin: 0;
+
+        }
+
+        .main-container {
+
+            flex: 1;
+
+            display: grid;
+
+            grid-template-columns: 1fr 1fr;
+
+            grid-template-rows: 2fr 3fr 1fr;
+
+            gap: 1rem;
+
+            padding: 1rem;
+
+        }
+
+        .display-box {
+
+            background-color: #ffed4e;
+
+            border: 3px solid #000;
+
+            border-radius: 8px;
+
+            padding: 1.5rem;
+
+            display: flex;
+
+            flex-direction: column;
+
+            justify-content: center;
+
+            align-items: center;
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+            position: relative;
+
+        }
+
+        .display-box h2 {
+
+            font-size: 1.8rem;
+
+            color: #000;
+
+            margin-bottom: 0.5rem;
+
+            text-align: left;
+
+            width: 100%;
+
+            position: absolute;
+
+            top: 10px;
+
+            left: 10px;
+
+            margin: 0;
+
+        }
+
+        .display-box .value {
+
+            font-size: 4rem;
+
+            font-weight: bold;
+
+            color: #000;
+
+            font-family: 'Courier New', monospace;
+
+            letter-spacing: 0.1rem;
+
+            cursor: pointer;
+
+            user-select: none;
+
+        }
+
+        .go-button-container {
+
+            grid-column: 1 / 3;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            position: relative;
+
+            background: rgba(0,0,0,0.05);
+
+        }
+
+        .go-button {
+
+            width: 350px;
+
+            height: 200px;
+
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+
+            border: 5px solid #000;
+
+            border-radius: 15px;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            font-size: 6rem;
+
+            font-weight: bold;
+
+            color: #000;
+
+            cursor: pointer;
+
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
+
+            transition: transform 0.1s, box-shadow 0.1s;
+
+            user-select: none;
+
+        }
+
+        .go-button:active {
+
+            transform: scale(0.95);
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+        }
+
+        .status-message {
+
+            position: absolute;
+
+            top: 10px;
+
+            right: 10px;
+
+            font-size: 1rem;
+
+            color: #000;
+
+            background-color: rgba(255, 255, 255, 0.7);
+
+            padding: 0.5rem 1rem;
+
+            border-radius: 5px;
+
+            max-width: 200px;
+
+            text-align: center;
+
+        }
+
+        .ok-button {
+
+            position: absolute;
+
+            bottom: 10px;
+
+            right: 10px;
+
+            width: 120px;
+
+            height: 80px;
+
+            background-color: #94a3b8;
+
+            border: 3px solid #000;
+
+            border-radius: 8px;
+
+            font-size: 2rem;
+
+            font-weight: bold;
+
+            color: #000;
+
+            cursor: pointer;
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+            user-select: none;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            z-index: 5;
+
+        }
+
+        .ok-button:active {
+
+            transform: scale(0.95);
+
+        }
+
+        .reset-button {
+
+            position: absolute;
+
+            bottom: 10px;
+
+            right: 140px;
+
+            width: 120px;
+
+            height: 80px;
+
+            background-color: #f87171;
+
+            border: 3px solid #000;
+
+            border-radius: 8px;
+
+            font-size: 2rem;
+
+            font-weight: bold;
+
+            color: #000;
+
+            cursor: pointer;
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+            user-select: none;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+            z-index: 5;
+
+        }
+
+        .reset-button:active {
+
+            transform: scale(0.95);
+
+        }
+
+        .bottom-buttons {
+
+            grid-column: 1 / 3;
+
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            gap: 1rem;
+
+        }
+
+        .nav-button {
+
+            flex: 1;
+
+            height: 100px;
+
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+
+            border: 4px solid #000;
+
+            border-radius: 10px;
+
+            font-size: 2.5rem;
+
+            font-weight: bold;
+
+            color: #000;
+
+            cursor: pointer;
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+            transition: transform 0.1s;
+
+            user-select: none;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+        }
+
+        .nav-button:active {
+
+            transform: scale(0.95);
+
+        }
+
+        .footer {
+
+            background: transparent;
+
+            text-align: center;
+
+            padding: 0.8rem;
+
+            font-size: 1.5rem;
+
+            font-weight: bold;
+
+            letter-spacing: 0.05rem;
+
+        }
+
+        /* Numpad Overlay */
+
+        #numpad-overlay {
+
+            position: fixed;
+
+            top: 0;
+
+            left: 0;
+
+            right: 0;
+
+            bottom: 0;
+
+            background-color: rgba(0, 0, 0, 0.85);
+
+            display: none;
+
+            justify-content: center;
+
+            align-items: center;
+
+            z-index: 1000;
+
+        }
+
+        #numpad-container {
+
+            background-color: #2d3748;
+
+            padding: 2rem;
+
+            border-radius: 15px;
+
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+
+        }
+
+        #numpad-display {
+
+            background-color: #000;
+
+            color: #4ade80;
+
+            font-size: 3rem;
+
+            font-family: 'Courier New', monospace;
+
+            padding: 1.5rem;
+
+            margin-bottom: 1.5rem;
+
+            border-radius: 8px;
+
+            text-align: right;
+
+            min-width: 350px;
+
+            min-height: 70px;
+
+        }
+
+        #numpad-grid {
+
+            display: grid;
+
+            grid-template-columns: repeat(3, 1fr);
+
+            gap: 1rem;
+
+        }
+
+        .numpad-btn {
+
+            width: 100px;
+
+            height: 100px;
+
+            background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
+
+            border: 3px solid #1a202c;
+
+            border-radius: 10px;
+
+            font-size: 2.5rem;
+
+            font-weight: bold;
+
+            color: white;
+
+            cursor: pointer;
+
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+
+            transition: transform 0.1s;
+
+            user-select: none;
+
+            display: flex;
+
+            justify-content: center;
+
+            align-items: center;
+
+        }
+
+        .numpad-btn:active {
+
+            transform: scale(0.95);
+
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+
+        }
+
+        .numpad-btn.enter {
+
+            grid-column: span 3;
+
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+
+            color: #000;
+
+        }
+
         .numpad-btn.clear {
             background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
             color: #000;
@@ -312,60 +569,96 @@
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Automated Pleat Pack Saw</h1>
-    </div>
-
-    <div class="main-container">
-        <!-- Target Display -->
+    <div class="header">
+
+        <h1>Automated Pleat Pack Saw</h1>
+
+    </div>
+
+
+
+    <div class="main-container">
+
+        <!-- Target Display -->
+
         <div class="display-box">
             <h2>TARGET (in)</h2>
             <div class="value" id="target-display" title="Click to edit">--.-</div>
         </div>
-
-        <!-- Actual Display -->
+
+
+        <!-- Actual Display -->
+
         <div class="display-box">
             <h2>ACTUAL (in)</h2>
             <div class="value" id="actual-display">--.-</div>
         </div>
-
+
+
         <!-- GO Button Container -->
         <div class="go-button-container">
             <div class="go-button" id="go-button">GO</div>
             <div class="status-message" id="status-message">READY</div>
             <div class="reset-button" id="reset-button">RST</div>
         </div>
-
-        <!-- Bottom Navigation Buttons -->
-        <div class="bottom-buttons">
-            <div class="nav-button" id="eng-button">ENG</div>
-            <div class="nav-button" id="home-button">Zero</div>
-        </div>
-    </div>
-
-    <div class="footer">
-        <img src="{{ url_for('static', filename='images/afm_logo.png') }}" alt="American Filter Manufacturing" style="height: 60px; max-width: 90%; object-fit: contain;">
-    </div>
-
+
+
+        <!-- Bottom Navigation Buttons -->
+
+        <div class="bottom-buttons">
+
+            <div class="nav-button" id="eng-button">ENG</div>
+
+            <div class="nav-button" id="home-button">Zero</div>
+
+        </div>
+
+    </div>
+
+
+
+    <div class="footer">
+
+        <img src="{{ url_for('static', filename='images/afm_logo.png') }}" alt="American Filter Manufacturing" style="height: 60px; max-width: 90%; object-fit: contain;">
+
+    </div>
+
+
+
     <!-- Numpad Overlay -->
     <div id="numpad-overlay">
         <div id="numpad-container">
             <div id="numpad-display">0</div>
-            <div id="numpad-grid">
-                <div class="numpad-btn" data-num="7">7</div>
-                <div class="numpad-btn" data-num="8">8</div>
-                <div class="numpad-btn" data-num="9">9</div>
-                <div class="numpad-btn" data-num="4">4</div>
-                <div class="numpad-btn" data-num="5">5</div>
-                <div class="numpad-btn" data-num="6">6</div>
-                <div class="numpad-btn" data-num="1">1</div>
-                <div class="numpad-btn" data-num="2">2</div>
-                <div class="numpad-btn" data-num="3">3</div>
-                <div class="numpad-btn clear" id="numpad-clear">⌫</div>
-                <div class="numpad-btn" data-num="0">0</div>
-                <div class="numpad-btn" data-num=".">.</div>
-                <div class="numpad-btn enter" id="numpad-enter">ENT</div>
-            </div>
+            <div id="numpad-grid">
+
+                <div class="numpad-btn" data-num="7">7</div>
+
+                <div class="numpad-btn" data-num="8">8</div>
+
+                <div class="numpad-btn" data-num="9">9</div>
+
+                <div class="numpad-btn" data-num="4">4</div>
+
+                <div class="numpad-btn" data-num="5">5</div>
+
+                <div class="numpad-btn" data-num="6">6</div>
+
+                <div class="numpad-btn" data-num="1">1</div>
+
+                <div class="numpad-btn" data-num="2">2</div>
+
+                <div class="numpad-btn" data-num="3">3</div>
+
+                <div class="numpad-btn clear" id="numpad-clear">⌫</div>
+
+                <div class="numpad-btn" data-num="0">0</div>
+
+                <div class="numpad-btn" data-num=".">.</div>
+
+                <div class="numpad-btn enter" id="numpad-enter">ENT</div>
+
+            </div>
+
         </div>
     </div>
 
@@ -381,8 +674,10 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const socket = io();
-
-            // Elements
+
+
+            // Elements
+
             const targetDisplay = document.getElementById('target-display');
             const actualDisplay = document.getElementById('actual-display');
             const goButton = document.getElementById('go-button');
@@ -390,8 +685,10 @@
             const engButton = document.getElementById('eng-button');
             const homeButton = document.getElementById('home-button');
             const statusMessage = document.getElementById('status-message');
-
-            // Numpad elements
+
+
+            // Numpad elements
+
             const numpadOverlay = document.getElementById('numpad-overlay');
             const numpadDisplay = document.getElementById('numpad-display');
             const numpadButtons = document.querySelectorAll('.numpad-btn[data-num]');
@@ -405,7 +702,7 @@
             let numpadValue = '0';
             let currentState = 'STARTUP';
             let targetValue = 0;
-
+            let lastOffsetMm = 0;
             const MM_PER_INCH = 25.4;
             const mmToInches = (mm) => mm / MM_PER_INCH;
             const inchesToMm = (inches) => inches * MM_PER_INCH;
@@ -414,79 +711,165 @@
                 return Number.isFinite(num) ? num : null;
             };
             const formatInches = (value) => (Number.isFinite(value) ? value : 0).toFixed(3);
-            const getM3PositionInches = (m3) => {
+            
+const getM3PositionInches = (m3) => {
+
                 if (!m3) return 0;
 
+
+
                 const offsetMm = toNumber(m3.offset_mm) || 0;
+
                 const posMmWithOffset = toNumber(m3.position_mm);
-                if (posMmWithOffset !== null) return mmToInches(posMmWithOffset);
+
+                if (posMmWithOffset !== null) return mmToInches(posMmWithOffset + offsetMm);
+
+
 
                 const rawMm = toNumber(m3.raw_position_mm);
+
                 if (rawMm !== null) return mmToInches(rawMm + offsetMm);
 
+
+
                 const posIn = toNumber(m3.position_in);
+
                 if (posIn !== null) return posIn + mmToInches(offsetMm);
 
+
+
                 const posMm = toNumber(m3.position);
+
                 if (posMm !== null) return mmToInches(posMm + offsetMm);
 
+
+
                 return 0;
+
             };
-
-            // Socket.IO Connection
-            socket.on('connect', () => {
-                console.log('Connected to server');
-            });
-
-            // Listen for 'update' event from Pi backend (not 'status_update')
-            socket.on('update', (data) => {
-                console.log('Received update:', data);
-
-                // Update state
-                if (data.state) {
-                    currentState = data.state;
-                    statusMessage.textContent = currentState;
-
-                    // Update status message color based on state
-                    if (currentState === 'READY' || currentState === 'IDLE') {
-                        statusMessage.style.backgroundColor = 'rgba(74, 222, 128, 0.7)';
-                    } else if (currentState === 'ERROR' || currentState === 'ALARM') {
-                        statusMessage.style.backgroundColor = 'rgba(248, 113, 113, 0.7)';
-                    } else if (currentState === 'RUNNING' || currentState === 'HOMING') {
-                        statusMessage.style.backgroundColor = 'rgba(59, 130, 246, 0.7)';
-                    } else {
-                        statusMessage.style.backgroundColor = 'rgba(251, 191, 36, 0.7)';
-                    }
-                }
-
-                // Update actual position from M3 backstop encoder
-                if (data.motors && data.motors.m3_backstop) {
-                    const positionInches = getM3PositionInches(data.motors.m3_backstop);
-                    actualDisplay.textContent = formatInches(positionInches);
-                }
+
+
+
+            // Socket.IO Connection
+
+            socket.on('connect', () => {
+
+                console.log('Connected to server');
+
             });
-
-            // Fetch initial status
-            fetch('/api/status')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.state) {
-                        currentState = data.state;
-                        statusMessage.textContent = currentState;
-                    }
-                })
-                .catch(err => console.error('Error fetching status:', err));
-
-            // GO Button - move backstop to target (same path as M3 window)
-            const sendBackstopGoto = () => {
+
+
+
+            // Listen for 'update' event from Pi backend (not 'status_update')
+
+            socket.on('update', (data) => {
+
+                console.log('Received update:', data);
+
+
+
+                // Update state
+
+                if (data.state) {
+
+                    currentState = data.state;
+
+                    statusMessage.textContent = currentState;
+
+
+
+                    // Update status message color based on state
+
+                    if (currentState === 'READY' || currentState === 'IDLE') {
+
+                        statusMessage.style.backgroundColor = 'rgba(74, 222, 128, 0.7)';
+
+                    } else if (currentState === 'ERROR' || currentState === 'ALARM') {
+
+                        statusMessage.style.backgroundColor = 'rgba(248, 113, 113, 0.7)';
+
+                    } else if (currentState === 'RUNNING' || currentState === 'HOMING') {
+
+                        statusMessage.style.backgroundColor = 'rgba(59, 130, 246, 0.7)';
+
+                    } else {
+
+                        statusMessage.style.backgroundColor = 'rgba(251, 191, 36, 0.7)';
+
+                    }
+
+                }
+
+
+
+                
+// Update actual position from M3 backstop encoder
+
+                if (data.motors && data.motors.m3_backstop) {
+
+                    const m3 = data.motors.m3_backstop;
+
+                    const offsetFromStatus = toNumber(m3.offset_mm);
+
+                    if (offsetFromStatus !== null) {
+
+                        lastOffsetMm = offsetFromStatus;
+
+                    }
+
+                    const positionInches = getM3PositionInches(m3);
+
+                    actualDisplay.textContent = formatInches(positionInches);
+
+                }
+
+            });
+
+
+            // Fetch initial status
+
+            fetch('/api/status')
+
+                .then(response => response.json())
+
+                .then(data => {
+
+                    if (data.state) {
+
+                        currentState = data.state;
+
+                        statusMessage.textContent = currentState;
+
+                    }
+
+                })
+
+                .catch(err => console.error('Error fetching status:', err));
+
+
+
+            // GO Button - move backstop to target (same path as M3 window)
+
+            
+const sendBackstopGoto = () => {
+
                 const positionInches = parseFloat(targetValue) || 0;
-                const positionMm = inchesToMm(positionInches);
-                console.log('GO/OK pressed - sending m3_goto to', positionMm, 'mm');
-                sendCommand('m3_goto', { position: positionMm });
+
+                const offsetMm = Number.isFinite(lastOffsetMm) ? lastOffsetMm : 0;
+
+                const positionMmRaw = Math.max(0, inchesToMm(positionInches) - offsetMm);
+
+                console.log("GO/OK pressed - sending m3_goto to", positionMmRaw, "mm (raw, offset applied)");
+
+                sendCommand("m3_goto", { position: positionMmRaw });
+
             };
-
+
+
+
             goButton.addEventListener('click', sendBackstopGoto);
-
+
+
             // Reset Button - confirm before resetting alarms and homing M2
             resetButton.addEventListener('click', () => {
                 console.log('Reset button pressed - showing confirmation');
@@ -508,54 +891,103 @@
             homeButton.addEventListener('click', () => {
                 console.log('Home button pressed');
                 sendCommand('m3_home');
-            });
-
-            // Engineering Button - Navigate to dashboard page
-            engButton.addEventListener('click', () => {
-                console.log('ENG button pressed - navigating to dashboard page');
-                window.location.href = '/dashboard';
-            });
-
-            // Target Display Click - Always Open Numpad (removed state check)
-            targetDisplay.addEventListener('click', () => {
-                console.log('Target clicked - opening numpad');
-                numpadValue = targetDisplay.textContent.replace(/[^\d.]/g, '');
-                if (!numpadValue || numpadValue === '.') {
-                    numpadValue = '0';
-                }
-                numpadDisplay.textContent = numpadValue;
-                numpadOverlay.style.display = 'flex';
-            });
-
-            // Numpad Logic
-            numpadButtons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const digit = button.getAttribute('data-num');
-
-                    if (numpadValue === '0' && digit !== '.') {
-                        numpadValue = digit;
-                    } else if (digit === '.') {
-                        if (!numpadValue.includes('.')) {
-                            numpadValue += digit;
-                        }
-                    } else {
-                        if (numpadValue.length < 8) {
-                            numpadValue += digit;
-                        }
-                    }
-                    numpadDisplay.textContent = numpadValue;
-                });
-            });
-
-            numpadClear.addEventListener('click', () => {
-                if (numpadValue.length > 1) {
-                    numpadValue = numpadValue.slice(0, -1);
-                } else {
-                    numpadValue = '0';
-                }
-                numpadDisplay.textContent = numpadValue;
-            });
-
+            });
+
+
+
+            // Engineering Button - Navigate to dashboard page
+
+            engButton.addEventListener('click', () => {
+
+                console.log('ENG button pressed - navigating to dashboard page');
+
+                window.location.href = '/dashboard';
+
+            });
+
+
+
+            // Target Display Click - Always Open Numpad (removed state check)
+
+            targetDisplay.addEventListener('click', () => {
+
+                console.log('Target clicked - opening numpad');
+
+                numpadValue = targetDisplay.textContent.replace(/[^\d.]/g, '');
+
+                if (!numpadValue || numpadValue === '.') {
+
+                    numpadValue = '0';
+
+                }
+
+                numpadDisplay.textContent = numpadValue;
+
+                numpadOverlay.style.display = 'flex';
+
+            });
+
+
+
+            // Numpad Logic
+
+            numpadButtons.forEach(button => {
+
+                button.addEventListener('click', () => {
+
+                    const digit = button.getAttribute('data-num');
+
+
+
+                    if (numpadValue === '0' && digit !== '.') {
+
+                        numpadValue = digit;
+
+
+                    } else if (digit === '.') {
+
+                        if (!numpadValue.includes('.')) {
+
+                            numpadValue += digit;
+
+                        }
+
+                    } else {
+
+                        if (numpadValue.length < 8) {
+
+                            numpadValue += digit;
+
+                        }
+
+                    }
+
+                    numpadDisplay.textContent = numpadValue;
+
+                });
+
+            });
+
+
+
+            numpadClear.addEventListener('click', () => {
+
+                if (numpadValue.length > 1) {
+
+                    numpadValue = numpadValue.slice(0, -1);
+
+                } else {
+
+                    numpadValue = '0';
+
+                }
+
+                numpadDisplay.textContent = numpadValue;
+
+            });
+
+
+
             numpadEnter.addEventListener('click', () => {
                 const finalInches = parseFloat(numpadValue) || 0;
                 const finalMm = inchesToMm(finalInches);
@@ -568,38 +1000,73 @@
                 // Send target update via API in millimeters (system units)
                 sendCommand('set_target', { target: finalMm });
             });
-
-            // Close numpad on overlay click
-            numpadOverlay.addEventListener('click', (e) => {
-                if (e.target === numpadOverlay) {
-                    numpadOverlay.style.display = 'none';
-                }
-            });
-
-            // Helper function to send commands via API
-            function sendCommand(command, params = {}) {
-                fetch('/api/command', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        command: command,
-                        params: params
-                    })
-                })
-                .then(response => response.json())
-                .then(result => {
-                    console.log('Command result:', result);
-                    if (!result.success) {
-                        console.error('Command failed:', result.error);
-                    }
-                })
-                .catch(err => {
-                    console.error('Error sending command:', err);
-                });
-            }
-        });
-    </script>
-</body>
-</html>
+
+
+            // Close numpad on overlay click
+
+            numpadOverlay.addEventListener('click', (e) => {
+
+                if (e.target === numpadOverlay) {
+
+                    numpadOverlay.style.display = 'none';
+
+                }
+
+            });
+
+
+
+            // Helper function to send commands via API
+
+            function sendCommand(command, params = {}) {
+
+                fetch('/api/command', {
+
+                    method: 'POST',
+
+                    headers: {
+
+                        'Content-Type': 'application/json',
+
+                    },
+
+                    body: JSON.stringify({
+
+                        command: command,
+
+                        params: params
+
+                    })
+
+                })
+
+                .then(response => response.json())
+
+                .then(result => {
+
+                    console.log('Command result:', result);
+
+                    if (!result.success) {
+
+                        console.error('Command failed:', result.error);
+
+                    }
+
+                })
+
+                .catch(err => {
+
+                    console.error('Error sending command:', err);
+
+                });
+
+            }
+
+        });
+
+    </script>
+
+</body>
+
+</html>
+
