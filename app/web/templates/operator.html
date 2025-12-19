@@ -853,19 +853,19 @@ const getM3PositionInches = (m3) => {
             // GO Button - move backstop to target (same path as M3 window)
 
             
+
 const sendBackstopGoto = () => {
 
                 const positionInches = parseFloat(targetValue) || 0;
 
-                const offsetMm = Number.isFinite(lastOffsetMm) ? lastOffsetMm : 0;
+                const positionMmRaw = inchesToMm(positionInches);
 
-                const positionMmRaw = Math.max(0, inchesToMm(positionInches) - offsetMm);
+                console.log('GO/OK pressed - sending m3_goto to', positionMmRaw, 'mm (no offset subtraction)');
 
-                console.log("GO/OK pressed - sending m3_goto to", positionMmRaw, "mm (raw, offset applied)");
-
-                sendCommand("m3_goto", { position: positionMmRaw });
+                sendCommand('m3_goto', { position: positionMmRaw });
 
             };
+
 
 
 
