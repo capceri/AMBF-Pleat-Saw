@@ -712,6 +712,7 @@
             };
             const formatInches = (value) => (Number.isFinite(value) ? value : 0).toFixed(3);
             
+
 const getM3PositionInches = (m3) => {
 
                 if (!m3) return 0;
@@ -722,7 +723,7 @@ const getM3PositionInches = (m3) => {
 
                 const posMmWithOffset = toNumber(m3.position_mm);
 
-                if (posMmWithOffset !== null) return mmToInches(posMmWithOffset + offsetMm);
+                if (posMmWithOffset !== null) return mmToInches(posMmWithOffset);
 
 
 
@@ -747,6 +748,7 @@ const getM3PositionInches = (m3) => {
                 return 0;
 
             };
+
 
 
 
