@@ -4,6 +4,7 @@ Provides real-time monitoring and manual control for commissioning and troublesh
 """
 
 import logging
+import subprocess
 import threading
 import time
 from typing import Dict, Any, Optional, Callable
@@ -183,6 +184,41 @@ class WebMonitor:
                     'm2_rev_timeout': self.config['motion']['m2_fixture']['timeout_rev_s'],
                     'm3_offset_mm': offset_mm,
                 })
+
+        @self.app.route('/api/wifi/scan')
+        def api_wifi_scan():
+            """Scan for nearby WiFi networks."""
+            networks, error = self._scan_wifi_networks()
+            return jsonify({
+                'success': error is None,
+                'networks': networks,
+                'error': error,
+            })
+
+        @self.app.route('/api/wifi/connect', methods=['POST'])
+        def api_wifi_connect():
+            """Connect to a WiFi network using nmcli."""
+            payload = request.get_json(silent=True) or {}
+            ssid = str(payload.get('ssid', '')).strip()
+            password = str(payload.get('password', '') or '')
+
+            if not ssid:
+                return jsonify({
+                    'success': False,
+                    'error': 'SSID is required.',
+                }), 400
+
+            result, error = self._connect_wifi(ssid, password)
+            if error:
+                return jsonify({
+                    'success': False,
+                    'error': error,
+                }), 500
+
+            return jsonify({
+                'success': True,
+                'message': result,
+            })
 
         @self.app.route('/api/diagnostics')
         def api_diagnostics():
@@ -445,6 +481,137 @@ class WebMonitor:
         except Exception as e:
             logger.error(f"Error getting statistics: {e}")
             return {'error': str(e)}
+
+    def _run_nmcli_command(self, args, timeout: float, use_sudo: bool = False):
+        if use_sudo:
+            args = ['sudo', '-n'] + args
+
+        try:
+            result = subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except FileNotFoundError:
+            return None, 'nmcli not found on system.'
+        except subprocess.TimeoutExpired:
+            return None, 'nmcli command timed out.'
+
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or result.stdout.strip() or 'nmcli command failed.'
+            return None, error_msg
+
+        return result.stdout.strip(), None
+
+    def _scan_wifi_networks(self):
+        nmcli_args = [
+            'nmcli',
+            '-f',
+            'SSID,SIGNAL,SECURITY,IN-USE',
+            '-m',
+            'multiline',
+            'dev',
+            'wifi',
+            'list',
+            '--rescan',
+            'yes',
+        ]
+
+        output, error = self._run_nmcli_command(
+            nmcli_args,
+            timeout=15,
+            use_sudo=True,
+        )
+        if error and 'sudo' in error.lower():
+            output, error = self._run_nmcli_command(
+                nmcli_args,
+                timeout=15,
+                use_sudo=False,
+            )
+        if error:
+            logger.warning("WiFi scan failed: %s", error)
+            return [], error
+
+        networks = []
+        current = {}
+
+        for line in output.splitlines():
+            if not line.strip():
+                if current:
+                    networks.append(current)
+                    current = {}
+                continue
+            if ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            key = key.strip().lower()
+            if key == 'ssid' and current:
+                networks.append(current)
+                current = {}
+            current[key] = value.strip()
+
+        if current:
+            networks.append(current)
+
+        cleaned = []
+        for entry in networks:
+            ssid = entry.get('ssid', '')
+            if ssid == '--':
+                ssid = ''
+            signal_raw = entry.get('signal', '')
+            try:
+                signal = int(signal_raw)
+            except (TypeError, ValueError):
+                signal = None
+            security = entry.get('security', '')
+            in_use_value = entry.get('in-use', '').strip().lower()
+            in_use = in_use_value in ('*', 'yes', 'true', '1')
+            cleaned.append({
+                'ssid': ssid,
+                'signal': signal,
+                'security': security,
+                'in_use': in_use,
+                'hidden': ssid == '',
+            })
+
+        deduped = {}
+        for entry in cleaned:
+            key = entry['ssid'] if entry['ssid'] else f"__hidden_{len(deduped)}"
+            if key not in deduped:
+                deduped[key] = entry
+                continue
+            existing = deduped[key]
+            if entry['in_use'] and not existing['in_use']:
+                deduped[key] = entry
+                continue
+            if existing['in_use'] and not entry['in_use']:
+                continue
+            if (entry['signal'] or 0) > (existing['signal'] or 0):
+                deduped[key] = entry
+
+        final_list = list(deduped.values())
+        final_list.sort(key=lambda item: (
+            not item['in_use'],
+            -(item['signal'] or 0),
+            item['ssid'].lower() if item['ssid'] else '',
+        ))
+
+        return final_list, None
+
+    def _connect_wifi(self, ssid: str, password: str):
+        args = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+        if password:
+            args += ['password', password]
+
+        output, error = self._run_nmcli_command(args, timeout=30, use_sudo=True)
+        if error and 'sudo' in error.lower():
+            output, error = self._run_nmcli_command(args, timeout=30, use_sudo=False)
+        if error:
+            logger.warning("WiFi connect failed for %s: %s", ssid, error)
+            return None, error
+
+        return output or f'Connected to {ssid}.', None
 
     def _execute_command(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """

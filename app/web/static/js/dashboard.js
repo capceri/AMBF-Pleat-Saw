@@ -9,6 +9,13 @@ let keypadTargetInput = null;
 let keypadValue = '0';
 let keypadOverlay = null;
 let keypadDisplay = null;
+let keyboardTargetInput = null;
+let keyboardValue = '';
+let keyboardOriginalValue = '';
+let keyboardOverlay = null;
+let keyboardDisplay = null;
+let keyboardShift = false;
+let keyboardShiftButton = null;
 
 function ensureKeypadElements() {
     if (!keypadOverlay) {
@@ -20,6 +27,16 @@ function ensureKeypadElements() {
     return !!(keypadOverlay && keypadDisplay);
 }
 
+function ensureKeyboardElements() {
+    if (!keyboardOverlay) {
+        keyboardOverlay = document.getElementById('keyboard-overlay');
+    }
+    if (!keyboardDisplay) {
+        keyboardDisplay = document.getElementById('keyboard-display');
+    }
+    return !!(keyboardOverlay && keyboardDisplay);
+}
+
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
     initWebSocket();
@@ -27,6 +44,8 @@ document.addEventListener('DOMContentLoaded', function() {
     fetchInputOverrides(); // Get current input override states
     fetchEngineeringParams(); // Load saved engineering parameters into input fields
     initTouchKeypad(); // Enable on-screen keypad for numeric fields
+    initTouchKeyboard(); // Enable on-screen keyboard for text fields
+    initWifiPanel(); // Setup WiFi scan panel
     logToConsole('Dashboard initialized', 'info');
 });
 
@@ -157,6 +176,174 @@ function updateDiagnostics(data) {
     // Log to console
     if (hasIssues) {
         logToConsole('Hardware connection issues detected - check diagnostics panel', 'warning');
+    }
+}
+
+// ===================== WiFi Panel =====================
+
+function initWifiPanel() {
+    const list = document.getElementById('wifi-networks');
+    if (!list) {
+        return;
+    }
+    scanWifi();
+}
+
+function scanWifi() {
+    const current = document.getElementById('wifi-current');
+    if (current) {
+        current.textContent = 'Scanning...';
+    }
+    setWifiMessage('Scanning for networks...', 'info');
+
+    fetch('/api/wifi/scan')
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                setWifiMessage(data.error || 'WiFi scan failed.', 'error');
+                if (current) {
+                    current.textContent = 'Scan failed';
+                }
+                renderWifiNetworks([]);
+                return;
+            }
+            renderWifiNetworks(data.networks || []);
+            setWifiMessage('', '');
+        })
+        .catch(error => {
+            console.error('Error scanning WiFi:', error);
+            setWifiMessage('WiFi scan failed.', 'error');
+            if (current) {
+                current.textContent = 'Scan failed';
+            }
+            renderWifiNetworks([]);
+        });
+}
+
+function renderWifiNetworks(networks) {
+    const list = document.getElementById('wifi-networks');
+    const current = document.getElementById('wifi-current');
+    if (!list) {
+        return;
+    }
+
+    list.innerHTML = '';
+    if (!networks || networks.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'wifi-empty';
+        empty.textContent = 'No networks found.';
+        list.appendChild(empty);
+        if (current) {
+            current.textContent = 'No networks detected';
+        }
+        return;
+    }
+
+    const active = networks.find(network => network.in_use);
+    if (current) {
+        if (active) {
+            const activeName = active.ssid ? active.ssid : '<hidden>';
+            current.textContent = `Connected: ${activeName}`;
+        } else {
+            current.textContent = 'Not connected';
+        }
+    }
+
+    networks.forEach(network => {
+        const row = document.createElement('div');
+        row.className = 'wifi-network';
+        if (network.in_use) {
+            row.classList.add('active');
+        }
+
+        const ssid = network.ssid ? network.ssid : '<hidden>';
+        const signal = network.signal !== null && network.signal !== undefined ? `${network.signal}%` : '--';
+        const security = network.security ? network.security : 'OPEN';
+
+        row.innerHTML = `
+            <div>
+                <div class="ssid">${ssid}</div>
+                <div class="meta">${security}</div>
+            </div>
+            <div class="signal">${signal}</div>
+        `;
+
+        row.addEventListener('click', () => {
+            const ssidInput = document.getElementById('wifi-ssid');
+            const passwordInput = document.getElementById('wifi-password');
+            if (ssidInput && network.ssid) {
+                ssidInput.value = network.ssid;
+                ssidInput.dispatchEvent(new Event('input', { bubbles: true }));
+                if (passwordInput) {
+                    passwordInput.focus();
+                }
+            }
+        });
+
+        list.appendChild(row);
+    });
+}
+
+function connectWifi() {
+    const ssidInput = document.getElementById('wifi-ssid');
+    const passwordInput = document.getElementById('wifi-password');
+    if (!ssidInput) {
+        return;
+    }
+
+    const ssid = (ssidInput.value || '').trim();
+    const password = passwordInput ? passwordInput.value || '' : '';
+
+    if (!ssid) {
+        setWifiMessage('SSID is required.', 'error');
+        return;
+    }
+
+    setWifiMessage(`Connecting to ${ssid}...`, 'info');
+
+    fetch('/api/wifi/connect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, password })
+    })
+        .then(response => response.json().then(data => ({ status: response.status, data })))
+        .then(result => {
+            if (!result.data.success) {
+                setWifiMessage(result.data.error || 'WiFi connection failed.', 'error');
+                return;
+            }
+            setWifiMessage(result.data.message || 'WiFi connected.', 'success');
+            setTimeout(scanWifi, 2000);
+        })
+        .catch(error => {
+            console.error('Error connecting WiFi:', error);
+            setWifiMessage('WiFi connection failed.', 'error');
+        });
+}
+
+function clearWifiForm() {
+    const ssidInput = document.getElementById('wifi-ssid');
+    const passwordInput = document.getElementById('wifi-password');
+    if (ssidInput) {
+        ssidInput.value = '';
+    }
+    if (passwordInput) {
+        passwordInput.value = '';
+    }
+    setWifiMessage('', '');
+}
+
+function setWifiMessage(message, level) {
+    const messageEl = document.getElementById('wifi-message');
+    if (!messageEl) {
+        return;
+    }
+    messageEl.textContent = message || '';
+    messageEl.className = 'wifi-message';
+    if (level === 'success') {
+        messageEl.classList.add('success');
+    } else if (level === 'error') {
+        messageEl.classList.add('error');
     }
 }
 
@@ -895,4 +1082,205 @@ function commitNumpadValue() {
     }
 
     closeInputKeypad();
+}
+
+// ===================== On-screen Keyboard =====================
+
+function initTouchKeyboard() {
+    ensureKeyboardElements();
+    keyboardShiftButton = document.getElementById('keyboard-shift');
+    const keyButtons = document.querySelectorAll('.keyboard-btn[data-key]');
+    const keyboardBackspace = document.getElementById('keyboard-backspace');
+    const keyboardClear = document.getElementById('keyboard-clear');
+    const keyboardEnter = document.getElementById('keyboard-enter');
+    const keyboardCancel = document.getElementById('keyboard-cancel');
+    const keyboardSpace = document.getElementById('keyboard-space');
+
+    if (!keyboardOverlay || !keyboardDisplay) {
+        console.error('[KEYBOARD] Missing required elements - aborting initialization');
+        return;
+    }
+
+    const inputs = document.querySelectorAll('.touch-keyboard');
+    inputs.forEach((input) => {
+        input.setAttribute('readonly', 'readonly');
+        input.setAttribute('inputmode', 'none');
+        input.style.cursor = 'pointer';
+
+        const open = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            openTouchKeyboard(input);
+        };
+
+        input.addEventListener('click', open);
+        input.addEventListener('touchstart', open, { passive: false });
+        input.addEventListener('focus', open);
+    });
+
+    keyButtons.forEach(button => {
+        button.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            handleKeyboardKey(button.getAttribute('data-key'));
+        });
+    });
+
+    if (keyboardBackspace) {
+        keyboardBackspace.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            handleKeyboardBackspace();
+        });
+    }
+
+    if (keyboardClear) {
+        keyboardClear.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            clearKeyboardValue();
+        });
+    }
+
+    if (keyboardEnter) {
+        keyboardEnter.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            commitKeyboardValue();
+        });
+    }
+
+    if (keyboardCancel) {
+        keyboardCancel.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            cancelKeyboard();
+        });
+    }
+
+    if (keyboardShiftButton) {
+        keyboardShiftButton.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            toggleKeyboardShift();
+        });
+    }
+
+    if (keyboardSpace) {
+        keyboardSpace.addEventListener('click', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+            handleKeyboardKey(' ');
+        });
+    }
+
+    keyboardOverlay.addEventListener('click', (e) => {
+        if (e.target === keyboardOverlay) {
+            cancelKeyboard();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('touch-keyboard')) {
+            e.preventDefault();
+            e.stopPropagation();
+            openTouchKeyboard(target);
+        }
+    }, true);
+}
+
+function openTouchKeyboard(input) {
+    if (!ensureKeyboardElements()) {
+        return;
+    }
+    keyboardTargetInput = input;
+    keyboardOriginalValue = input.value || '';
+    keyboardValue = keyboardOriginalValue;
+    keyboardShift = false;
+    updateKeyboardShiftVisual();
+    updateKeyboardDisplay();
+    keyboardOverlay.classList.add('show');
+}
+
+function closeTouchKeyboard() {
+    if (keyboardOverlay) {
+        keyboardOverlay.classList.remove('show');
+    }
+    keyboardTargetInput = null;
+    keyboardValue = '';
+    keyboardOriginalValue = '';
+}
+
+function toggleKeyboardShift() {
+    keyboardShift = !keyboardShift;
+    updateKeyboardShiftVisual();
+}
+
+function updateKeyboardShiftVisual() {
+    if (keyboardShiftButton) {
+        if (keyboardShift) {
+            keyboardShiftButton.classList.add('active');
+        } else {
+            keyboardShiftButton.classList.remove('active');
+        }
+    }
+}
+
+function handleKeyboardKey(key) {
+    if (!keyboardTargetInput) {
+        return;
+    }
+    let nextChar = key;
+    if (keyboardShift && key.length === 1 && key >= 'a' && key <= 'z') {
+        nextChar = key.toUpperCase();
+    }
+    keyboardValue += nextChar;
+    updateKeyboardDisplay();
+}
+
+function handleKeyboardBackspace() {
+    if (!keyboardTargetInput) {
+        return;
+    }
+    if (keyboardValue.length > 0) {
+        keyboardValue = keyboardValue.slice(0, -1);
+    }
+    updateKeyboardDisplay();
+}
+
+function clearKeyboardValue() {
+    keyboardValue = '';
+    updateKeyboardDisplay();
+}
+
+function updateKeyboardDisplay() {
+    if (!keyboardDisplay) {
+        return;
+    }
+    keyboardDisplay.textContent = keyboardValue;
+    if (keyboardTargetInput) {
+        keyboardTargetInput.value = keyboardValue;
+        keyboardTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+}
+
+function commitKeyboardValue() {
+    if (!keyboardTargetInput) {
+        closeTouchKeyboard();
+        return;
+    }
+    keyboardTargetInput.value = keyboardValue;
+    keyboardTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+    keyboardTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+    closeTouchKeyboard();
+}
+
+function cancelKeyboard() {
+    if (keyboardTargetInput) {
+        keyboardTargetInput.value = keyboardOriginalValue;
+        keyboardTargetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        keyboardTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    closeTouchKeyboard();
 }

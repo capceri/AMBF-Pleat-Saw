@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pleat Saw Monitor - Commissioning Dashboard</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=20251127-offset-var3-keypad">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}?v=20251221-wifi-keyboard">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
@@ -86,6 +86,40 @@
                     <li>Check Nextion display is connected via serial</li>
                     <li>Run diagnostic script: <code>bash diagnose_web_monitor.sh</code></li>
                 </ul>
+            </div>
+        </section>
+
+        <!-- WiFi Setup Panel -->
+        <section class="panel wifi-panel">
+            <h2>WiFi Setup</h2>
+            <div class="wifi-status-bar">
+                <div class="wifi-status">
+                    <span class="wifi-label">Current:</span>
+                    <span id="wifi-current" class="wifi-current">Scanning...</span>
+                </div>
+                <button class="btn" onclick="scanWifi()">Scan WiFi</button>
+            </div>
+            <div class="wifi-grid">
+                <div class="wifi-list">
+                    <div class="wifi-list-header">
+                        <span>Available Networks</span>
+                        <span class="wifi-hint">Tap a network to fill SSID</span>
+                    </div>
+                    <div id="wifi-networks" class="wifi-networks">
+                        <div class="wifi-empty">No scan yet.</div>
+                    </div>
+                </div>
+                <div class="wifi-form">
+                    <label for="wifi-ssid">SSID:</label>
+                    <input type="text" id="wifi-ssid" class="touch-keyboard" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                    <label for="wifi-password">Password:</label>
+                    <input type="password" id="wifi-password" class="touch-keyboard" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+                    <div class="wifi-actions">
+                        <button class="btn" onclick="connectWifi()">Connect</button>
+                        <button class="btn btn-warning" onclick="clearWifiForm()">Clear</button>
+                    </div>
+                    <div id="wifi-message" class="wifi-message"></div>
+                </div>
             </div>
         </section>
 
@@ -382,7 +416,7 @@
         </footer>
     </div>
 
-    <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20251127-offset-var3-keypad"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}?v=20251221-wifi-keyboard"></script>
 
     <!-- Numeric keypad overlay (kept at end of body for desktop compatibility) -->
     <div id="numpad-overlay" class="numpad-overlay">
@@ -412,6 +446,75 @@
                 <div class="numpad-row">
                     <button id="numpad-cancel" class="numpad-btn cancel">Cancel</button>
                     <button id="numpad-enter" class="numpad-btn enter">Enter</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Touch keyboard overlay -->
+    <div id="keyboard-overlay" class="keyboard-overlay">
+        <div id="keyboard-container">
+            <div class="keyboard-header">
+                <div id="keyboard-display"></div>
+                <div class="keyboard-header-actions">
+                    <button id="keyboard-backspace" class="keyboard-btn action">BKSP</button>
+                    <button id="keyboard-clear" class="keyboard-btn action">CLR</button>
+                </div>
+            </div>
+            <div id="keyboard-keys">
+                <div class="keyboard-row">
+                    <button class="keyboard-btn" data-key="1">1</button>
+                    <button class="keyboard-btn" data-key="2">2</button>
+                    <button class="keyboard-btn" data-key="3">3</button>
+                    <button class="keyboard-btn" data-key="4">4</button>
+                    <button class="keyboard-btn" data-key="5">5</button>
+                    <button class="keyboard-btn" data-key="6">6</button>
+                    <button class="keyboard-btn" data-key="7">7</button>
+                    <button class="keyboard-btn" data-key="8">8</button>
+                    <button class="keyboard-btn" data-key="9">9</button>
+                    <button class="keyboard-btn" data-key="0">0</button>
+                </div>
+                <div class="keyboard-row">
+                    <button class="keyboard-btn" data-key="q">q</button>
+                    <button class="keyboard-btn" data-key="w">w</button>
+                    <button class="keyboard-btn" data-key="e">e</button>
+                    <button class="keyboard-btn" data-key="r">r</button>
+                    <button class="keyboard-btn" data-key="t">t</button>
+                    <button class="keyboard-btn" data-key="y">y</button>
+                    <button class="keyboard-btn" data-key="u">u</button>
+                    <button class="keyboard-btn" data-key="i">i</button>
+                    <button class="keyboard-btn" data-key="o">o</button>
+                    <button class="keyboard-btn" data-key="p">p</button>
+                </div>
+                <div class="keyboard-row">
+                    <button class="keyboard-btn" data-key="a">a</button>
+                    <button class="keyboard-btn" data-key="s">s</button>
+                    <button class="keyboard-btn" data-key="d">d</button>
+                    <button class="keyboard-btn" data-key="f">f</button>
+                    <button class="keyboard-btn" data-key="g">g</button>
+                    <button class="keyboard-btn" data-key="h">h</button>
+                    <button class="keyboard-btn" data-key="j">j</button>
+                    <button class="keyboard-btn" data-key="k">k</button>
+                    <button class="keyboard-btn" data-key="l">l</button>
+                </div>
+                <div class="keyboard-row">
+                    <button id="keyboard-shift" class="keyboard-btn action">Shift</button>
+                    <button class="keyboard-btn" data-key="z">z</button>
+                    <button class="keyboard-btn" data-key="x">x</button>
+                    <button class="keyboard-btn" data-key="c">c</button>
+                    <button class="keyboard-btn" data-key="v">v</button>
+                    <button class="keyboard-btn" data-key="b">b</button>
+                    <button class="keyboard-btn" data-key="n">n</button>
+                    <button class="keyboard-btn" data-key="m">m</button>
+                    <button class="keyboard-btn" data-key=".">.</button>
+                    <button class="keyboard-btn" data-key="-">-</button>
+                </div>
+                <div class="keyboard-row keyboard-row-wide">
+                    <button class="keyboard-btn" data-key="@">@</button>
+                    <button class="keyboard-btn" data-key="_">_</button>
+                    <button id="keyboard-space" class="keyboard-btn wide" data-action="space">Space</button>
+                    <button id="keyboard-cancel" class="keyboard-btn cancel">Cancel</button>
+                    <button id="keyboard-enter" class="keyboard-btn enter">Enter</button>
                 </div>
             </div>
         </div>

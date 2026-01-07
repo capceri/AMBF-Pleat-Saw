@@ -523,6 +523,10 @@ body {
     .motor-container {
         grid-template-columns: 1fr;
     }
+
+    .wifi-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (max-width: 768px) {
@@ -565,6 +569,247 @@ body {
 
 .console::-webkit-scrollbar-thumb:hover {
     background: #777;
+}
+
+/* WiFi setup panel */
+.wifi-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.wifi-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+}
+
+.wifi-current {
+    color: var(--info-color);
+}
+
+.wifi-grid {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 20px;
+}
+
+.wifi-list {
+    background: var(--light-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.wifi-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--light-text);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.wifi-hint {
+    font-weight: 600;
+    color: var(--info-color);
+}
+
+.wifi-networks {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.wifi-network {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: #ffffff;
+    cursor: pointer;
+    transition: background 0.15s ease, border 0.15s ease;
+}
+
+.wifi-network:hover {
+    background: rgba(52, 152, 219, 0.08);
+    border-color: var(--info-color);
+}
+
+.wifi-network.active {
+    background: rgba(39, 174, 96, 0.15);
+    border-color: var(--success-color);
+}
+
+.wifi-network .ssid {
+    font-weight: 600;
+}
+
+.wifi-network .meta {
+    font-size: 12px;
+    color: var(--light-text);
+}
+
+.wifi-network .signal {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+.wifi-empty {
+    color: var(--light-text);
+    font-style: italic;
+    padding: 6px 4px;
+}
+
+.wifi-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wifi-form input {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    font-size: 16px;
+}
+
+.wifi-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.wifi-message {
+    min-height: 20px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.wifi-message.success {
+    color: var(--success-color);
+}
+
+.wifi-message.error {
+    color: var(--danger-color);
+}
+
+/* Touchscreen keyboard */
+.keyboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.keyboard-overlay.show {
+    display: flex !important;
+}
+
+#keyboard-container {
+    background: #1f2933;
+    padding: 20px;
+    border-radius: 16px;
+    width: 780px;
+    max-width: 95%;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    border: 2px solid #0f172a;
+}
+
+.keyboard-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+#keyboard-display {
+    flex: 1;
+    background: #0f172a;
+    color: #f1f5f9;
+    font-size: 20px;
+    font-family: 'Courier New', monospace;
+    padding: 12px;
+    border-radius: 10px;
+    min-height: 50px;
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+.keyboard-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.keyboard-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.keyboard-row-wide {
+    margin-bottom: 0;
+}
+
+.keyboard-btn {
+    flex: 1;
+    min-width: 40px;
+    padding: 12px 10px;
+    font-size: 16px;
+    border: none;
+    border-radius: 10px;
+    background: #334155;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+    transition: background 0.15s ease;
+}
+
+.keyboard-btn:active {
+    background: #475569;
+}
+
+.keyboard-btn.wide {
+    flex: 3;
+    min-width: 120px;
+}
+
+.keyboard-btn.action {
+    background: #475569;
+}
+
+.keyboard-btn.active {
+    background: #64748b;
+}
+
+.keyboard-btn.enter {
+    background: var(--success-color);
+    color: #0f172a;
+}
+
+.keyboard-btn.enter:active {
+    background: #1e9d55;
+}
+
+.keyboard-btn.cancel {
+    background: var(--danger-color);
 }
 
 /* Touchscreen numeric keypad */
