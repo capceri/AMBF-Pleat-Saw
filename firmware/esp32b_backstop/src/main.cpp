@@ -49,15 +49,19 @@
 #define TEETH           15      // 15T pulley
 #define CIRC_MM         (PITCH_MM * TEETH)  // 150.0 mm/rev
 
-// Interrupt-based encoder: 400 counts/rev (rising edge counting)
-#define ENCODER_PPR     400.0f
-#define COUNTS_PER_REV  ENCODER_PPR  // 400 counts/rev (1x counting on A rising edge)
-#define MM_PER_COUNT    (CIRC_MM / COUNTS_PER_REV)  // 0.375 mm/count
-#define IN_PER_COUNT    (MM_PER_COUNT / 25.4f)      // ~0.01476 inches per count
+// Calibration scale based on measured travel error (35.5 in command, 0.188 in short)
+#define CALIBRATION_SCALE 1.005324f
 
-// Motor step calibration
-#define STEPS_PER_MM    (6400.0f / 150.0f)  // 6400 driver pulses / 150mm per rev ≈ 42.667 steps/mm
-#define STEPS_PER_IN    (STEPS_PER_MM * 25.4f)  // ≈ 1086.67 steps/inch
+// Interrupt-based encoder: 400 PPR, 4x quadrature counting (calibrated)
+#define ENCODER_PPR     400.0f
+#define COUNTS_PER_REV  (ENCODER_PPR * 4.0f * CALIBRATION_SCALE)
+#define MM_PER_COUNT    (CIRC_MM / COUNTS_PER_REV)  // ~0.0933 mm/count
+#define IN_PER_COUNT    (MM_PER_COUNT / 25.4f)      // ~0.00367 inches per count
+
+// Motor step calibration (calibrated)
+#define STEPS_PER_REV   6400.0f  // Driver pulses per motor revolution
+#define STEPS_PER_MM    ((STEPS_PER_REV * CALIBRATION_SCALE) / CIRC_MM)
+#define STEPS_PER_IN    (STEPS_PER_MM * 25.4f)
 
 // Control parameters
 #define DEFAULT_VELOCITY_IPS    0.0492f    // ~1.25 mm/s = ~500 steps/sec
@@ -81,6 +85,7 @@ portMUX_TYPE timerMux = portMUX_INITIALIZER_UNLOCKED;
 struct {
     bool detected;
     volatile long counts;         // Raw encoder counts (modified by ISR)
+    volatile uint8_t last_ab;     // Last A/B state for quadrature decode
     int32_t last_counts;          // Last reading for delta calculation
     int32_t last_delta_counts;    // Delta since last velocity update
 
@@ -134,7 +139,7 @@ void syncMotorStepsWithEncoder() {
 
 // ========== Function Prototypes ==========
 void IRAM_ATTR onTimer();
-void IRAM_ATTR handleEncoderA();  // Encoder interrupt handler
+void IRAM_ATTR handleEncoderChange();  // Quadrature interrupt handler
 void processSerialCommand();
 void updateEncoder();
 bool initInterruptEncoder();
@@ -192,25 +197,21 @@ void IRAM_ATTR onTimer() {
     portEXIT_CRITICAL_ISR(&timerMux);
 }
 
-// ========== Interrupt-Based Encoder Handler ==========
-// Exact same logic as proven working test script
-volatile unsigned long lastInterruptTime = 0;
-const unsigned long debounceDelay = 50;  // 50 microseconds debounce
+// ========== Quadrature Encoder Handler (4x) ==========
+static const int8_t quad_table[16] = {
+    0, -1,  1,  0,
+    1,  0,  0, -1,
+   -1,  0,  0,  1,
+    0,  1, -1,  0
+};
 
-void IRAM_ATTR handleEncoderA() {
-    // Simple debounce - ignore interrupts within 50us of each other
-    unsigned long interruptTime = micros();
-    if (interruptTime - lastInterruptTime < debounceDelay) {
-        return;
-    }
-    lastInterruptTime = interruptTime;
-
-    // Only act on rising edges to avoid double-counting
-    if (digitalRead(ENC_A_PIN) == HIGH) {
-        const bool bState = digitalRead(ENC_B_PIN);
-        // When A leads B (CW on most encoders) B is LOW at A's rising edge
-        encoder.counts += bState ? -1 : 1;
-    }
+void IRAM_ATTR handleEncoderChange() {
+    uint8_t a = (uint8_t)digitalRead(ENC_A_PIN);
+    uint8_t b = (uint8_t)digitalRead(ENC_B_PIN);
+    uint8_t curr = (a << 1) | b;
+    uint8_t idx = (encoder.last_ab << 2) | curr;
+    encoder.counts += quad_table[idx];
+    encoder.last_ab = curr;
 }
 
 // ========== Interrupt Encoder Functions ==========
@@ -219,11 +220,12 @@ bool initInterruptEncoder() {
     pinMode(ENC_A_PIN, INPUT_PULLUP);
     pinMode(ENC_B_PIN, INPUT_PULLUP);
 
-    // Attach interrupt to channel A (on CHANGE to catch rising edges)
-    attachInterrupt(digitalPinToInterrupt(ENC_A_PIN), handleEncoderA, CHANGE);
+    // Attach interrupts to both channels for 4x quadrature decoding
+    attachInterrupt(digitalPinToInterrupt(ENC_A_PIN), handleEncoderChange, CHANGE);
+    attachInterrupt(digitalPinToInterrupt(ENC_B_PIN), handleEncoderChange, CHANGE);
 
     Serial.println("Interrupt-based Encoder: DETECTED");
-    Serial.printf("Resolution: %.0f counts/rev (1x counting)\n", ENCODER_PPR);
+    Serial.printf("Resolution: %.0f counts/rev (4x quadrature)\n", COUNTS_PER_REV);
 
     return true;
 }
@@ -328,6 +330,7 @@ void setup() {
     encoder.counts = 0;
     encoder.last_counts = 0;
     encoder.last_delta_counts = 0;
+    encoder.last_ab = ((uint8_t)digitalRead(ENC_A_PIN) << 1) | (uint8_t)digitalRead(ENC_B_PIN);
     encoder.position_in = 0.0f;
     encoder.velocity_ips = 0.0f;
     encoder.velocity_ema_ips = 0.0f;
