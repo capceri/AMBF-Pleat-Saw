@@ -513,6 +513,8 @@ class Supervisor:
     def _state_complete(self):
         """COMPLETE state: Cycle finished."""
         elapsed = time.monotonic() - self.state_entry_time
+        clamp_release_duration_s = 2.0
+        clamp_release_pulse_s = 0.2
 
         # On entry: release clamp, set lights, update stats
         if elapsed < 0.1:
@@ -528,6 +530,10 @@ class Supervisor:
 
             logger.info(f"Cycle complete (total: {self.stats['cycles_complete']})")
 
+        # Reassert clamp release for 2 seconds to ensure pneumatics respond
+        if elapsed < clamp_release_duration_s and (elapsed % clamp_release_pulse_s) < 0.02:
+            self.io.set_output('clamp', False)
+
         # Send M2 stop commands repeatedly to eliminate residual motion
         # Send every 100ms for 0.5 seconds to ensure motor fully stops
         if elapsed < 0.5 and (elapsed % 0.1) < 0.02:
@@ -535,8 +541,8 @@ class Supervisor:
             if elapsed < 0.15:
                 logger.debug("Sending M2 stop commands to eliminate residual motion")
 
-        # After 0.5s, return to IDLE
-        if elapsed >= 0.5:
+        # After clamp release window, return to IDLE
+        if elapsed >= clamp_release_duration_s:
             self._transition_to(State.IDLE)
 
     def _state_alarm(self):
