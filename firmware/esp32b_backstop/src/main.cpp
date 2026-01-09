@@ -53,7 +53,7 @@
 #define CALIBRATION_SCALE 1.005324f
 
 // Interrupt-based encoder: 400 PPR, 4x quadrature counting (calibrated)
-#define ENCODER_PPR     400.0f
+#define ENCODER_PPR     1000.0f
 #define COUNTS_PER_REV  (ENCODER_PPR * 4.0f * CALIBRATION_SCALE)
 #define MM_PER_COUNT    (CIRC_MM / COUNTS_PER_REV)  // ~0.0933 mm/count
 #define IN_PER_COUNT    (MM_PER_COUNT / 25.4f)      // ~0.00367 inches per count
