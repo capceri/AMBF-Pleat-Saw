@@ -5,7 +5,7 @@
  *
  * Hardware:
  * - Motor M3: STEP=GPIO27, DIR=GPIO14
- * - Quadrature Encoder: A=GPIO32, B=GPIO33 (1000 PPR, interrupt-based)
+ * - Quadrature Encoder: A=GPIO32, B=GPIO33 (1000 PPR hardware, calibrated to 992 effective)
  * - USB Serial: 115200 baud
  * - Pulley: 15 teeth × 10mm pitch = 150mm/rev
  *
@@ -36,7 +36,7 @@
 #define M3_STEP_PIN     27
 #define M3_DIR_PIN      14
 
-// Quadrature Encoder (1000 PPR) - Interrupt-based
+// Quadrature Encoder (1000 PPR hardware) - Interrupt-based
 #define ENC_A_PIN       32  // Encoder Channel A (interrupt)
 #define ENC_B_PIN       33  // Encoder Channel B (sampled)
 
@@ -52,8 +52,8 @@
 // Calibration scale based on measured travel error (35.5 in command, 0.188 in short)
 #define CALIBRATION_SCALE 1.005324f
 
-// Interrupt-based encoder: 1000 PPR, 4x quadrature counting (calibrated)
-#define ENCODER_PPR     1000.0f
+// Interrupt-based encoder: 992 PPR effective, 4x quadrature counting (calibrated)
+#define ENCODER_PPR     992.0f
 #define COUNTS_PER_REV  (ENCODER_PPR * 4.0f * CALIBRATION_SCALE)
 #define MM_PER_COUNT    (CIRC_MM / COUNTS_PER_REV)  // ~0.0933 mm/count
 #define IN_PER_COUNT    (MM_PER_COUNT / 25.4f)      // ~0.00367 inches per count
