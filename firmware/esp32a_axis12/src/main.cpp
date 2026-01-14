@@ -33,7 +33,7 @@
 // M2 Fixture Motor
 #define M2_STEP_PIN     25
 #define M2_DIR_PIN      26
-#define M2_HOME_PIN     27
+#define M2_FWD_LIMIT_PIN 27
 
 // ========== Motor Parameters ==========
 
@@ -63,6 +63,8 @@ struct {
     double freq_hz;
 } m2;
 
+bool m2_limit_latched = false;
+
 uint32_t heartbeat_counter = 0;
 unsigned long last_status_ms = 0;
 
@@ -75,8 +77,8 @@ void m2_feed_forward();
 void m2_feed_reverse();
 void m2_stop();
 void m2_set_velocity(double vel_mm_s);
-bool is_m2_home_active();
-void m2_check_home_stop();
+bool is_m2_fwd_limit_active();
+void m2_check_limit_stop();
 void queryStatus();
 void sendResponse(const char* msg);
 void m1_pwm_set_frequency(double freq_hz);
@@ -95,7 +97,7 @@ void setup() {
     // Configure GPIO
     pinMode(M1_DIR_PIN, OUTPUT);
     pinMode(M2_DIR_PIN, OUTPUT);
-    pinMode(M2_HOME_PIN, INPUT_PULLUP);
+    pinMode(M2_FWD_LIMIT_PIN, INPUT_PULLUP);
     digitalWrite(M1_DIR_PIN, M1_DIR_CW ? HIGH : LOW);
     digitalWrite(M2_DIR_PIN, LOW);
 
@@ -133,7 +135,7 @@ void setup() {
 
 void loop() {
     processSerialCommand();
-    m2_check_home_stop();
+    m2_check_limit_stop();
 
     // Send status update every 100ms
     unsigned long now = millis();
@@ -246,6 +248,7 @@ void m2_feed_forward() {
     digitalWrite(M2_DIR_PIN, M2_DIR_FWD ? HIGH : LOW);
     m2.direction_fwd = true;
     m2.in_motion = true;
+    m2_limit_latched = false;
     
     if (m2.vel_mm_s == 0) {
         m2.vel_mm_s = 120.0;  // Default velocity
@@ -259,11 +262,6 @@ void m2_feed_forward() {
 }
 
 void m2_feed_reverse() {
-    if (is_m2_home_active()) {
-        sendResponse("ERROR M2_HOME_ACTIVE");
-        return;
-    }
-
     digitalWrite(M2_DIR_PIN, M2_DIR_FWD ? LOW : HIGH);
     m2.direction_fwd = false;
     m2.in_motion = true;
@@ -305,13 +303,22 @@ void m2_set_velocity(double vel_mm_s) {
     sendResponse(msg);
 }
 
-bool is_m2_home_active() {
-    return digitalRead(M2_HOME_PIN) == LOW;
+bool is_m2_fwd_limit_active() {
+    return digitalRead(M2_FWD_LIMIT_PIN) == LOW;
 }
 
-void m2_check_home_stop() {
-    if (m2.in_motion && !m2.direction_fwd && is_m2_home_active()) {
-        m2_stop();
+void m2_check_limit_stop() {
+    if (m2.in_motion && m2.direction_fwd) {
+        if (is_m2_fwd_limit_active()) {
+            if (!m2_limit_latched) {
+                m2_limit_latched = true;
+                m2_stop();
+            }
+        } else {
+            m2_limit_latched = false;
+        }
+    } else if (!is_m2_fwd_limit_active()) {
+        m2_limit_latched = false;
     }
 }
 
