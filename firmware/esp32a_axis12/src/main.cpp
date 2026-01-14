@@ -33,7 +33,7 @@
 // M2 Fixture Motor
 #define M2_STEP_PIN     25
 #define M2_DIR_PIN      26
-#define M2_HOME_PIN     2
+#define M2_HOME_PIN     27
 
 // ========== Motor Parameters ==========
 
