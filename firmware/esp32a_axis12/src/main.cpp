@@ -33,6 +33,7 @@
 // M2 Fixture Motor
 #define M2_STEP_PIN     25
 #define M2_DIR_PIN      26
+#define M2_HOME_PIN     2
 
 // ========== Motor Parameters ==========
 
@@ -74,6 +75,8 @@ void m2_feed_forward();
 void m2_feed_reverse();
 void m2_stop();
 void m2_set_velocity(double vel_mm_s);
+bool is_m2_home_active();
+void m2_check_home_stop();
 void queryStatus();
 void sendResponse(const char* msg);
 void m1_pwm_set_frequency(double freq_hz);
@@ -92,6 +95,7 @@ void setup() {
     // Configure GPIO
     pinMode(M1_DIR_PIN, OUTPUT);
     pinMode(M2_DIR_PIN, OUTPUT);
+    pinMode(M2_HOME_PIN, INPUT_PULLUP);
     digitalWrite(M1_DIR_PIN, M1_DIR_CW ? HIGH : LOW);
     digitalWrite(M2_DIR_PIN, LOW);
 
@@ -129,6 +133,7 @@ void setup() {
 
 void loop() {
     processSerialCommand();
+    m2_check_home_stop();
 
     // Send status update every 100ms
     unsigned long now = millis();
@@ -254,6 +259,11 @@ void m2_feed_forward() {
 }
 
 void m2_feed_reverse() {
+    if (is_m2_home_active()) {
+        sendResponse("ERROR M2_HOME_ACTIVE");
+        return;
+    }
+
     digitalWrite(M2_DIR_PIN, M2_DIR_FWD ? LOW : HIGH);
     m2.direction_fwd = false;
     m2.in_motion = true;
@@ -293,6 +303,16 @@ void m2_set_velocity(double vel_mm_s) {
     char msg[64];
     snprintf(msg, sizeof(msg), "M2_VEL_SET vel=%.1f", vel_mm_s);
     sendResponse(msg);
+}
+
+bool is_m2_home_active() {
+    return digitalRead(M2_HOME_PIN) == LOW;
+}
+
+void m2_check_home_stop() {
+    if (m2.in_motion && !m2.direction_fwd && is_m2_home_active()) {
+        m2_stop();
+    }
 }
 
 // ========== Status Query ==========
