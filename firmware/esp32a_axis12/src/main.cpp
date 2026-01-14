@@ -63,7 +63,7 @@ struct {
     double freq_hz;
 } m2;
 
-bool m2_limit_latched = false;
+bool m2_limit_active_prev = false;
 
 uint32_t heartbeat_counter = 0;
 unsigned long last_status_ms = 0;
@@ -100,6 +100,7 @@ void setup() {
     pinMode(M2_FWD_LIMIT_PIN, INPUT_PULLUP);
     digitalWrite(M1_DIR_PIN, M1_DIR_CW ? HIGH : LOW);
     digitalWrite(M2_DIR_PIN, LOW);
+    m2_limit_active_prev = (digitalRead(M2_FWD_LIMIT_PIN) == LOW);
 
     // Initialize state
     memset(&m1, 0, sizeof(m1));
@@ -248,7 +249,6 @@ void m2_feed_forward() {
     digitalWrite(M2_DIR_PIN, M2_DIR_FWD ? HIGH : LOW);
     m2.direction_fwd = true;
     m2.in_motion = true;
-    m2_limit_latched = false;
     
     if (m2.vel_mm_s == 0) {
         m2.vel_mm_s = 120.0;  // Default velocity
@@ -308,18 +308,15 @@ bool is_m2_fwd_limit_active() {
 }
 
 void m2_check_limit_stop() {
+    bool active = is_m2_fwd_limit_active();
+
     if (m2.in_motion && m2.direction_fwd) {
-        if (is_m2_fwd_limit_active()) {
-            if (!m2_limit_latched) {
-                m2_limit_latched = true;
-                m2_stop();
-            }
-        } else {
-            m2_limit_latched = false;
+        if (active && !m2_limit_active_prev) {
+            m2_stop();
         }
-    } else if (!is_m2_fwd_limit_active()) {
-        m2_limit_latched = false;
     }
+
+    m2_limit_active_prev = active;
 }
 
 // ========== Status Query ==========
