@@ -226,18 +226,18 @@ class ESP32AUSBSerial:
     def stop_m1(self) -> Tuple[bool, str]:
         return self._send_command("1s", expect=("M1_STOPPED",))
 
-    def set_m2_velocity(self, vel_mm_s: float) -> Tuple[bool, str]:
+    def set_m2_velocity(self, vel_mm_s: float, timeout: float = 0.2):
         vel = max(0.0, vel_mm_s)
-        return self._send_command(f"2v{vel:.1f}")
+        return self._send_command(f"2v{vel:.1f}", timeout=timeout)
 
-    def feed_forward(self) -> Tuple[bool, str]:
-        return self._send_command("2f", expect=("M2_FWD",))
+    def feed_forward(self, timeout: float = 0.2):
+        return self._send_command("2f", timeout=timeout)
 
-    def feed_reverse(self) -> Tuple[bool, str]:
-        return self._send_command("2b", expect=("M2_REV",))
+    def feed_reverse(self, timeout: float = 0.2):
+        return self._send_command("2b", timeout=timeout)
 
-    def stop_m2(self) -> Tuple[bool, str]:
-        return self._send_command("2s", expect=("M2_STOPPED",))
+    def stop_m2(self, timeout: float = 0.2):
+        return self._send_command("2s", expect=None, timeout=timeout)
 
     def query_status(self) -> ESP32AStatus:
         """Send STATUS command and parse reply."""
