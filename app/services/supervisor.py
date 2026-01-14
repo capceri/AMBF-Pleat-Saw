@@ -85,6 +85,7 @@ class Supervisor:
         self.is_paused = False
         self.pause_saved_state = None  # Save state before pause for resume
         self.pause_saved_outputs = None  # Save output states before pause
+        self.resume_target_state = None  # State to resume after blade restart
 
         # Process parameters (from config)
         self.m1_rpm = config['motion']['m1_blade']['rpm_default']
@@ -291,8 +292,12 @@ class Supervisor:
             self.pause_saved_state = None
             self.pause_saved_outputs = None
 
-            # Resume to saved state
-            self._transition_to(saved_state)
+            if saved_state in (State.FEED_FWD, State.DWELL, State.FEED_REV, State.CLAMP):
+                self.resume_target_state = saved_state
+                self._transition_to(State.START_SPINDLE)
+            else:
+                self.resume_target_state = None
+                self._transition_to(saved_state)
 
     def _get_current_outputs(self):
         """Get current output states for pause/resume."""
@@ -411,11 +416,21 @@ class Supervisor:
 
         if status and status['running']:
             logger.info("Blade running")
-            self._transition_to(State.FEED_FWD)
+            target_state = self.resume_target_state
+            self.resume_target_state = None
+            if target_state is not None:
+                self._transition_to(target_state)
+            else:
+                self._transition_to(State.FEED_FWD)
         elif elapsed >= self.m1_start_timeout:
             # Proceed even if RUN flag not reported by ESP32-A
             logger.warning("Blade status not reporting RUN; proceeding to feed forward")
-            self._transition_to(State.FEED_FWD)
+            target_state = self.resume_target_state
+            self.resume_target_state = None
+            if target_state is not None:
+                self._transition_to(target_state)
+            else:
+                self._transition_to(State.FEED_FWD)
 
     def _state_feed_fwd(self):
         """FEED_FWD state: Feed forward until Sensor3."""
