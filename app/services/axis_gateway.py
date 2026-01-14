@@ -137,7 +137,7 @@ class AxisGateway:
         self.m2_position_mm = 0.0
         self.m3_position_mm = 0.0  # Kept in mm for compatibility
         self.m3_position_in = 0.0   # Source of truth from encoder
-        self.m3_offset_mm = 220.0   # Fixed engineering offset (mm)
+        self.m3_offset_mm = 215.0   # Fixed engineering offset (mm)
 
         # Heartbeat tracking
         self._last_heartbeat_a = 0

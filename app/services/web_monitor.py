@@ -14,7 +14,7 @@ from flask_socketio import SocketIO, emit
 logger = logging.getLogger(__name__)
 
 MM_PER_INCH = 25.4
-DEFAULT_M3_OFFSET_MM = 220.0
+DEFAULT_M3_OFFSET_MM = 215.0
 
 
 class WebMonitor:
