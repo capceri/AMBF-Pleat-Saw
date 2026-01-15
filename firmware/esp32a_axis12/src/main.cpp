@@ -80,6 +80,7 @@ void m2_stop();
 void m2_set_velocity(double vel_mm_s);
 bool is_m2_fwd_limit_active();
 void m2_check_limit_stop();
+void send_limit_state();
 void queryStatus();
 void sendResponse(const char* msg);
 void m1_pwm_set_frequency(double freq_hz);
@@ -167,6 +168,10 @@ void processSerialCommand() {
         case 'i':
         case 'I':
             sendResponse("ID:ESP32A");
+            break;
+        case 'l':
+        case 'L':
+            send_limit_state();
             break;
 
         case '?':
@@ -332,6 +337,12 @@ void m2_check_limit_stop() {
     }
 
     m2_limit_active_prev = active;
+}
+
+void send_limit_state() {
+    char msg[16];
+    snprintf(msg, sizeof(msg), "LIM:%d", is_m2_fwd_limit_active() ? 1 : 0);
+    sendResponse(msg);
 }
 
 // ========== Status Query ==========
