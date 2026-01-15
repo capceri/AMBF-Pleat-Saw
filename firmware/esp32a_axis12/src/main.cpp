@@ -64,6 +64,7 @@ struct {
 } m2;
 
 bool m2_limit_active_prev = false;
+bool m2_limit_armed = false;
 
 uint32_t heartbeat_counter = 0;
 unsigned long last_status_ms = 0;
@@ -249,6 +250,8 @@ void m2_feed_forward() {
     digitalWrite(M2_DIR_PIN, M2_DIR_FWD ? HIGH : LOW);
     m2.direction_fwd = true;
     m2.in_motion = true;
+    m2_limit_active_prev = is_m2_fwd_limit_active();
+    m2_limit_armed = !m2_limit_active_prev;
     
     if (m2.vel_mm_s == 0) {
         m2.vel_mm_s = 120.0;  // Default velocity
@@ -310,10 +313,22 @@ bool is_m2_fwd_limit_active() {
 void m2_check_limit_stop() {
     bool active = is_m2_fwd_limit_active();
 
-    if (m2.in_motion && m2.direction_fwd) {
-        if (active && !m2_limit_active_prev) {
-            m2_stop();
+    if (!m2.in_motion || !m2.direction_fwd) {
+        m2_limit_armed = false;
+        m2_limit_active_prev = active;
+        return;
+    }
+
+    if (!m2_limit_armed) {
+        if (!active) {
+            m2_limit_armed = true;
         }
+        m2_limit_active_prev = active;
+        return;
+    }
+
+    if (active && !m2_limit_active_prev) {
+        m2_stop();
     }
 
     m2_limit_active_prev = active;
