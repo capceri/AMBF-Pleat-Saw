@@ -65,6 +65,8 @@ struct {
 
 bool m2_limit_active_prev = false;
 bool m2_limit_armed = false;
+unsigned long m2_limit_active_since_ms = 0;
+const unsigned long M2_LIMIT_DEBOUNCE_MS = 10;
 
 uint32_t heartbeat_counter = 0;
 unsigned long last_status_ms = 0;
@@ -321,6 +323,7 @@ void m2_check_limit_stop() {
     if (!m2.in_motion || !m2.direction_fwd) {
         m2_limit_armed = false;
         m2_limit_active_prev = active;
+        m2_limit_active_since_ms = 0;
         return;
     }
 
@@ -329,11 +332,18 @@ void m2_check_limit_stop() {
             m2_limit_armed = true;
         }
         m2_limit_active_prev = active;
+        m2_limit_active_since_ms = 0;
         return;
     }
 
-    if (active && !m2_limit_active_prev) {
-        m2_stop();
+    if (active) {
+        if (m2_limit_active_since_ms == 0) {
+            m2_limit_active_since_ms = millis();
+        } else if (millis() - m2_limit_active_since_ms >= M2_LIMIT_DEBOUNCE_MS) {
+            m2_stop();
+        }
+    } else {
+        m2_limit_active_since_ms = 0;
     }
 
     m2_limit_active_prev = active;
