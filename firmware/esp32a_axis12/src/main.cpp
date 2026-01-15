@@ -33,6 +33,7 @@
 // M2 Fixture Motor
 #define M2_STEP_PIN     25
 #define M2_DIR_PIN      26
+#define M2_FWD_LIMIT_PIN 27
 
 // ========== Motor Parameters ==========
 
@@ -62,6 +63,8 @@ struct {
     double freq_hz;
 } m2;
 
+bool m2_limit_active_prev = false;
+
 uint32_t heartbeat_counter = 0;
 unsigned long last_status_ms = 0;
 
@@ -74,6 +77,8 @@ void m2_feed_forward();
 void m2_feed_reverse();
 void m2_stop();
 void m2_set_velocity(double vel_mm_s);
+bool is_m2_fwd_limit_active();
+void m2_check_limit_stop();
 void queryStatus();
 void sendResponse(const char* msg);
 void m1_pwm_set_frequency(double freq_hz);
@@ -92,8 +97,10 @@ void setup() {
     // Configure GPIO
     pinMode(M1_DIR_PIN, OUTPUT);
     pinMode(M2_DIR_PIN, OUTPUT);
+    pinMode(M2_FWD_LIMIT_PIN, INPUT_PULLUP);
     digitalWrite(M1_DIR_PIN, M1_DIR_CW ? HIGH : LOW);
     digitalWrite(M2_DIR_PIN, LOW);
+    m2_limit_active_prev = (digitalRead(M2_FWD_LIMIT_PIN) == LOW);
 
     // Initialize state
     memset(&m1, 0, sizeof(m1));
@@ -129,6 +136,7 @@ void setup() {
 
 void loop() {
     processSerialCommand();
+    m2_check_limit_stop();
 
     // Send status update every 100ms
     unsigned long now = millis();
@@ -293,6 +301,22 @@ void m2_set_velocity(double vel_mm_s) {
     char msg[64];
     snprintf(msg, sizeof(msg), "M2_VEL_SET vel=%.1f", vel_mm_s);
     sendResponse(msg);
+}
+
+bool is_m2_fwd_limit_active() {
+    return digitalRead(M2_FWD_LIMIT_PIN) == LOW;
+}
+
+void m2_check_limit_stop() {
+    bool active = is_m2_fwd_limit_active();
+
+    if (m2.in_motion && m2.direction_fwd) {
+        if (active && !m2_limit_active_prev) {
+            m2_stop();
+        }
+    }
+
+    m2_limit_active_prev = active;
 }
 
 // ========== Status Query ==========
