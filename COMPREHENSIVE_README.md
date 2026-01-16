@@ -3,9 +3,9 @@
 
 **Project:** Industrial Pleat Pack Cutting System
 **Client:** American Filter Manufacturing (AFM)
-**Version:** 3.4.1
-**Date:** November 2025
-**Last Updated:** November 13, 2025 (Session 4 - Operator Page Position Fix)
+**Version:** 3.5.0
+**Date:** January 2026
+**Last Updated:** January 16, 2026 (Session 5 - ESP32 Calibrations + Cycle Reliability)
 
 ---
 
@@ -44,17 +44,25 @@ The Automated Pleat Pack Saw is a distributed control system that automates the 
 ### System Specifications
 
 - **Master Controller**: Raspberry Pi 4 Model B (4GB RAM)
-- **Communication**: Dual RS-485 channels
-  - Channel 0: 9600 baud for I/O module
-  - Channel 1: 115200 baud for ESP32 motor controllers
+- **Communication**: USB serial for ESP32A/B (115200) + RS-485 for I/O module (9600)
+  - USB serial ports: /dev/ttyUSB0 or /dev/ttyUSB1 (auto-detected)
+  - RS-485 channel: 9600 baud for I/O module (if installed)
 - **Motor Types**:
   - M1 (Blade): Stepper motor @ 22,333 pulses/rev
   - M2 (Fixture): Servo stepper @ 750 steps/mm (with ×10 Modbus scaling)
   - M3 (Backstop): Servo with AS5600 encoder feedback on Raspberry Pi I2C (optional)
 - **Web Interface**: Port 5000 (operator, engineering, dashboard)
-- **Network**: Ethernet (192.168.68.109)
+- **Network**: Ethernet (192.168.68.123)
 - **Operating System**: Raspberry Pi OS
 - **I2C Bus**: /dev/i2c-1 (GPIO2/GPIO3) for AS5600 encoder
+
+### Recent Updates (January 2026)
+
+- **ESP32B Encoder Update**: 1000 PPR hardware installed, calibrated to 992 PPR effective (corrected +0.4 in over 47.6 in)
+- **ESP32A Forward Limit Stop**: GPIO27 active-low limit input with momentary stop + 10 ms debounce, plus `L` status query
+- **Light Curtain Resume**: Cycle resume now restarts blade before feed to prevent part/blade damage
+- **M2 Command Reliability**: Reduced ESP32A timeouts and `STATUS` query waits for proper response to eliminate intermittent feed delay
+- **M3 Offset Default**: Backstop offset updated to 215 mm across services and UI
 
 ### Recent Updates (November 2025)
 
@@ -76,7 +84,7 @@ The Automated Pleat Pack Saw is a distributed control system that automates the 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Raspberry Pi 4 Master                        │
-│                  IP: 192.168.68.109:5000                        │
+│                  IP: 192.168.68.123:5000                        │
 │                                                                  │
 │  ┌────────────────┐  ┌──────────────┐  ┌─────────────────┐    │
 │  │  State Machine │  │ Web Monitor  │  │  Modbus Manager │    │
@@ -103,6 +111,8 @@ The Automated Pleat Pack Saw is a distributed control system that automates the 
    9600         9600       115200       115200
 ```
 
+**Note**: Current production uses USB serial for ESP32A/B. RS-485 shown above is legacy wiring retained for reference.
+
 ### Hardware Components
 
 #### Master Controller
@@ -114,24 +124,26 @@ The Automated Pleat Pack Saw is a distributed control system that automates the 
 - **Interfaces**:
   - USB for RS-485 adapters (2 channels)
   - HDMI for web browser display (optional)
-  - Ethernet for network access (192.168.68.109)
+  - Ethernet for network access (192.168.68.123)
   - GPIO I2C Bus: /dev/i2c-1 (GPIO2=SDA, GPIO3=SCL) for AS5600 encoder
 
-**RS-485 Adapters**
-- Channel 0: I/O module communication (9600 baud) → /dev/ttyUSB0
-- Channel 1: ESP32 motor controllers (115200 baud) → /dev/ttyUSB1
+**USB Serial / RS-485 Adapters**
+- ESP32A (M1/M2) USB serial: 115200 baud → /dev/ttyUSB0 or /dev/ttyUSB1
+- ESP32B (M3) USB serial: 115200 baud → /dev/ttyUSB0 or /dev/ttyUSB1
+- RS-485 adapter (if installed): I/O module communication (9600 baud) → remaining /dev/ttyUSB*
 
 #### ESP32 Motor Controllers
 
 **ESP32A - M1 Blade & M2 Fixture**
 - **Chip**: ESP32-D0WD-V3
-- **Modbus Slave ID**: 2
+- **USB Serial ID**: `ESP32A` (query with `I`; legacy Modbus ID 2 if RS-485 used)
 - **Baud Rate**: 115200
 - **MAC Address**: 80:f3:da:4b:a3:ec
 - **Firmware**: `/firmware/esp32a_axis12/src/main.cpp`
 - **Functions**:
   - M1 Blade Motor: Step generation via MCPWM (22,333 pulses/rev)
   - M2 Fixture Motor: Step generation via MCPWM (750 steps/mm)
+  - M2 forward limit: GPIO27 active-low input with momentary stop + 10 ms debounce (`L` command reports state)
   - Calibrated for accurate RPM and velocity control
 
 **M1 Blade Motor Configuration:**
@@ -152,14 +164,15 @@ The Automated Pleat Pack Saw is a distributed control system that automates the 
 
 **ESP32B - M3 Backstop**
 - **Chip**: ESP32-D0WD-V3
-- **Modbus Slave ID**: 3
+- **USB Serial ID**: `ESP32B` (query with `I`; legacy Modbus ID 3 if RS-485 used)
 - **Baud Rate**: 115200
 - **MAC Address**: 84:1f:e8:28:39:40
 - **Firmware**: `/firmware/esp32b_backstop/src/main.cpp`
 - **Functions**:
-  - M3 Backstop Motor: Step generation via MCPWM
-  - **Note**: AS5600 encoder moved to Raspberry Pi I2C (no longer on ESP32B)
-  - ESP32B firmware retains encoder code but is not used in production
+  - M3 Backstop Motor: Step generation via MCPWM with closed-loop correction
+  - Quadrature encoder (A=GPIO32, B=GPIO33): 1000 PPR hardware, 992 PPR effective, 4x decode
+  - Automatic status updates at 10 Hz: `POS <inches> <velocity> <encoder_counts> <motor_steps>`
+  - **Note**: AS5600 encoder moved to Raspberry Pi I2C for monitoring; ESP32B uses quadrature encoder for control
 
 **AS5600 Encoder Auto-Detection (Legacy - Not Used):**
 ```cpp
@@ -466,37 +479,30 @@ def reset_position(self) -> None
 
 **M3 Motor:**
 - Uses MCPWM for step generation
-- PID control for closed-loop positioning (when encoder present)
-- Open-loop mode when encoder not detected
+- Closed-loop corrections from quadrature encoder counts
+- Automatic status updates at 10 Hz
 
-**AS5600 Encoder:**
-- I2C Address: 0x36
-- Resolution: 12-bit (4096 counts/rev)
+**Quadrature Encoder (current):**
+- A=GPIO32 (interrupt), B=GPIO33 (sampled)
+- Hardware: 1000 PPR, calibrated to 992 PPR effective
+- 4x decode; counts/rev = ENCODER_PPR × 4 × CALIBRATION_SCALE
 - Pulley: 15 teeth × 10mm pitch = 150mm circumference
-- Linear resolution: 0.0366mm per count = 0.00144 in/count
-- Auto-detection: Checks at startup, disables polling if not found
+- Scale: ~0.0933 mm/count (~0.00367 in/count)
 
-**Startup Detection Logic:**
-```cpp
-void setupEncoder() {
-    Wire.begin(SDA_PIN, SCL_PIN);
-    Wire.setClock(400000);
-    Wire.setTimeout(I2C_TIMEOUT_MS);
+**USB Serial Protocol (current):**
+- `g<inches>`: Go to position (inches)
+- `h`: Home (reset encoder to 0)
+- `s`: Stop motor
+- `v<ips>`: Set velocity (inches/sec)
+- `r`: Reset encoder counts
+- `?`: Query status (returns `STATUS ...`)
+- Automatic updates: `POS <inches> <velocity> <encoder_counts> <motor_steps>` (10 Hz)
 
-    Wire.beginTransmission(AS5600_ADDR);
-    Wire.write(AS5600_RAW_ANGLE_REG);
-    uint8_t error = Wire.endTransmission(false);
+**Legacy AS5600 (monitoring only):**
+- AS5600 moved to Raspberry Pi I2C; ESP32B does not use it for control
+- See `app/services/encoder_reader.py` for Pi-side monitoring
 
-    if (error == 0 && Wire.requestFrom(AS5600_ADDR, 2) == 2) {
-        m3.encoder_detected = true;
-    } else {
-        m3.encoder_detected = false;
-        // Modbus remains stable even without encoder
-    }
-}
-```
-
-**Modbus Registers:**
+**Legacy Modbus Registers (pre-USB, for reference only):**
 
 **M3 Position Control:**
 - HREG 20-21: Target position (mm × 100, int32)
@@ -659,7 +665,7 @@ All pages use the same Flask server and Socket.IO for real-time updates.
 
 ### 1. Operator Interface
 
-**URL**: `http://192.168.68.109:5000/`
+**URL**: `http://192.168.68.123:5000/`
 **File**: `/app/web/templates/operator.html`
 
 **Design**: Touchscreen-optimized with large buttons and clear displays
@@ -738,14 +744,14 @@ engButton.addEventListener('click', () => {
 
 ### 2. Engineering Dashboard
 
-**URL**: `http://192.168.68.109:5000/engineering`
+**URL**: `http://192.168.68.123:5000/engineering`
 **File**: `/app/web/templates/engineering.html`
 
 **Note**: Currently identical to dashboard page. Reserved for future use.
 
 ### 3. Dashboard (Commissioning)
 
-**URL**: `http://192.168.68.109:5000/dashboard`
+**URL**: `http://192.168.68.123:5000/dashboard`
 **File**: `/app/web/templates/dashboard.html`
 
 **Purpose**: Full diagnostic and commissioning interface
@@ -1047,7 +1053,7 @@ outputs:
 **Via Dashboard:**
 
 **M1 Blade RPM:**
-1. Navigate to dashboard: `http://192.168.68.109:5000/dashboard`
+1. Navigate to dashboard: `http://192.168.68.123:5000/dashboard`
 2. M1 panel → "Auto Cycle RPM" input
 3. Enter RPM (5-1000)
 4. Click "Apply to Auto"
@@ -1069,7 +1075,7 @@ outputs:
 
 **Via Config File** (requires service restart):
 ```bash
-ssh ambf1@192.168.68.109
+ssh ambf1@192.168.68.123
 sudo nano ~/pleat_saw/config/config.yaml
 # Edit values
 sudo systemctl restart pleat-saw
@@ -1085,10 +1091,10 @@ sudo systemctl restart pleat-saw
    - Turn on 24V power supply for motors and I/O
    - Pi boots automatically (30-60 seconds)
    - Service starts: `pleat-saw.service`
-   - Web interface available at `http://192.168.68.109:5000/`
+   - Web interface available at `http://192.168.68.123:5000/`
 
 2. **Access Operator Interface**:
-   - Open browser to `http://192.168.68.109:5000/`
+   - Open browser to `http://192.168.68.123:5000/`
    - Touchscreen or mouse/keyboard
    - System initializes to IDLE state
 
@@ -1465,12 +1471,12 @@ socket.on('update', (data) => {
 
 **Symptoms**:
 - Browser shows "Connection refused" or timeout
-- Cannot reach `http://192.168.68.109:5000/`
+- Cannot reach `http://192.168.68.123:5000/`
 
 **Checks**:
 ```bash
 # SSH to Pi
-ssh ambf1@192.168.68.109
+ssh ambf1@192.168.68.123
 
 # Check service status
 sudo systemctl status pleat-saw
@@ -1485,7 +1491,7 @@ curl http://localhost:5000/
 **Solutions**:
 - Restart service: `sudo systemctl restart pleat-saw`
 - Check logs: `sudo journalctl -u pleat-saw -f`
-- Verify network: `ping 192.168.68.109`
+- Verify network: `ping 192.168.68.123`
 - Check firewall: `sudo ufw status`
 
 #### 2. Modbus Communication Errors
@@ -1699,18 +1705,144 @@ sudo dmesg -w
 **Network Diagnostics**:
 ```bash
 # Test connectivity from Mac
-ping 192.168.68.109
+ping 192.168.68.123
 
 # Test web server
-curl http://192.168.68.109:5000/
+curl http://192.168.68.123:5000/
 
 # Check open ports
-nmap 192.168.68.109
+nmap 192.168.68.123
 ```
 
 ---
 
 ## Recent Changes
+
+### January 16, 2026 - Session 5 Summary: ESP32 Calibrations + Cycle Reliability
+
+#### Modification Timeline (Git, Jan 2026)
+- 8c26993: Update ESP32B encoder from 400 PPR to 1000 PPR hardware baseline
+- 7711c4e: Calibrate ESP32B encoder effective PPR to 992 (corrected +0.4 in over 47.6 in)
+- 60cbdf1: Set default M3 offset to 215 mm across services and UI
+- ec96a74: Reduce ESP32A M2 command timeouts for faster fault detection
+- f1231c9: Restart blade on light curtain resume before feed continues
+- 3fb5ee8 -> 163048d: GPIO27 forward limit experiments and rollback to restore motion
+- aa07afc, c3ae84f, ef3d5f6, 5b3c1d9: Final GPIO27 momentary forward-limit stop with arming + debounce; added `L` limit query
+- 32af9ea: ESP32A status query now waits for STATUS reply (resolves intermittent cycle-start delay)
+
+#### 1) ESP32B Encoder Upgrade + Calibration (M3 Backstop)
+
+**Problem**: The M3 backstop encoder was replaced with a 1000 PPR hardware encoder. Firmware still assumed the older PPR and travel overshot by ~0.4 in over a 47.6 in move.
+
+**Root Cause**: Encoder PPR mismatch and calibration scale error in the ESP32B firmware caused the position conversion to drift long.
+
+**Solution**:
+- Update `ENCODER_PPR` to match the new hardware (1000 PPR).
+- Apply an effective calibration to 992 PPR based on measured error: 47.6 / 48.0 = 0.9917 -> 1000 * 0.9917 ~= 992.
+
+**Changes Made**:
+- `ENCODER_PPR` updated in `firmware/esp32b_backstop/src/main.cpp` to `992.0f`.
+- Header comment updated to reflect 1000 PPR hardware and 992 PPR effective calibration.
+
+**Result**:
+- Backstop travel now matches commanded distances within measurement tolerance.
+
+**Files Modified**:
+- `firmware/esp32b_backstop/src/main.cpp`
+
+**Testing**:
+- Commanded 47.6 in move with the new encoder; verified elimination of the +0.4 in overshoot.
+
+#### 2) Default M3 Offset Updated to 215 mm
+
+**Problem**: Default M3 offset remained at 220 mm after mechanical changes; required update to 215 mm.
+
+**Solution**: Update default offset value consistently in service logic and UI defaults.
+
+**Changes Made**:
+- `app/services/axis_gateway.py`: `m3_offset_mm` default set to 215.0.
+- `app/services/web_monitor.py`: default offset set to 215.0.
+- `app/web/static/js/dashboard.js`: dashboard default offset set to 215.
+- `app/web/templates/dashboard.html`: dashboard offset input default set to 215.
+
+**Result**:
+- Operator and engineering interfaces now load with the correct default offset.
+
+**Files Modified**:
+- `app/services/axis_gateway.py`
+- `app/services/web_monitor.py`
+- `app/web/static/js/dashboard.js`
+- `app/web/templates/dashboard.html`
+
+#### 3) Light Curtain Resume Restarts Blade Before Feed
+
+**Problem**: When the light curtain was broken and remade, the cycle resumed feed motion without restarting the blade, risking blade and part damage.
+
+**Root Cause**: Resume logic bypassed the spindle start sequence and returned directly to feed state.
+
+**Solution**: Add a resume target state and route the resume through `START_SPINDLE` so the blade spins up before M2 feed continues.
+
+**Changes Made**:
+- `app/services/supervisor.py`: resume flow now tracks `resume_target_state` and restarts the spindle before returning to feed.
+
+**Result**:
+- After light curtain recovery, the blade restarts first and feed resumes safely.
+
+**Files Modified**:
+- `app/services/supervisor.py`
+
+#### 4) ESP32A M2 Command Reliability + Status Query Fix
+
+**Problem**: Intermittent cycle start delays where the blade started but M2 feed sometimes stalled; occasional timeouts in M2 command handling.
+
+**Root Cause**:
+- Command timeouts were long enough to stall the state machine during transient serial hiccups.
+- `query_status` did not wait for the ESP32A `STATUS` response, causing stale status reads.
+
+**Solution**:
+- Reduce ESP32A command timeouts for M2 actions.
+- Make `query_status` wait for a `STATUS` response line before updating internal status.
+
+**Changes Made**:
+- `app/services/esp32a_usb_serial.py`: reduced `feed_forward`, `feed_reverse`, and `stop_m2` timeouts to 0.2s.
+- `app/services/esp32a_usb_serial.py`: `query_status` now uses `_send_command("?", expect=("STATUS",))`.
+
+**Result**:
+- Feed start delays eliminated; state machine remains responsive during serial noise.
+
+**Files Modified**:
+- `app/services/esp32a_usb_serial.py`
+
+#### 5) ESP32A GPIO27 Forward Limit: Momentary Stop
+
+**Problem**: The delay between M2 reaching the forward limit switch and the motor stopping varied by ~1 second.
+
+**Goal**: Add a momentary stop inside ESP32A so the stop is immediate while leaving return control with the Pi.
+
+**Solution**:
+- Add GPIO27 as an active-low forward limit input.
+- Implement an armed edge-triggered stop with 10 ms debounce.
+- Stop only when moving forward to avoid interfering with reverse.
+- Add `L` command to report limit state for diagnostics.
+
+**Implementation Notes**:
+```
+if m2 in motion AND direction_fwd AND limit active for >= 10 ms -> m2_stop()
+```
+
+**Changes Made**:
+- `firmware/esp32a_axis12/src/main.cpp`:
+  - Added `M2_FWD_LIMIT_PIN` on GPIO27 (INPUT_PULLUP).
+  - Added `m2_limit_armed` gating to ignore an already-active limit at start.
+  - Added debounce (`M2_LIMIT_DEBOUNCE_MS = 10`) before stopping.
+  - Added `L` command to query limit state (`LIM:0/1`).
+
+**Result**:
+- M2 stops immediately on the forward limit with deterministic timing.
+- Pi still issues the return command, so overall sequence control remains unchanged.
+
+**Files Modified**:
+- `firmware/esp32a_axis12/src/main.cpp`
 
 ### November 13, 2025 - Session 4 Summary: Operator Page Position Display Fix
 
@@ -1755,9 +1887,9 @@ if (data.motors && data.motors.m3_backstop) {
 - `app/web/templates/operator.html` (line 348-352)
 
 **Testing**:
-- Deployed to Raspberry Pi at 192.168.68.109
+- Deployed to Raspberry Pi at 192.168.68.123
 - Service restarted successfully
-- Operator page verified at http://192.168.68.109:5000/
+- Operator page verified at http://192.168.68.123:5000/
 - Position matches dashboard display
 
 ---
@@ -2078,21 +2210,21 @@ pip install -r requirements.txt
 **Manual Deployment**:
 ```bash
 # Stop service
-ssh ambf1@192.168.68.109 "sudo systemctl stop pleat-saw"
+ssh ambf1@192.168.68.123 "sudo systemctl stop pleat-saw"
 
 # Copy files
-scp -r app ambf1@192.168.68.109:~/pleat_saw/
-scp -r config ambf1@192.168.68.109:~/pleat_saw/
-scp requirements.txt ambf1@192.168.68.109:~/pleat_saw/
+scp -r app ambf1@192.168.68.123:~/pleat_saw/
+scp -r config ambf1@192.168.68.123:~/pleat_saw/
+scp requirements.txt ambf1@192.168.68.123:~/pleat_saw/
 
 # Install dependencies (if changed)
-ssh ambf1@192.168.68.109 "cd ~/pleat_saw && source venv/bin/activate && pip install -r requirements.txt"
+ssh ambf1@192.168.68.123 "cd ~/pleat_saw && source venv/bin/activate && pip install -r requirements.txt"
 
 # Start service
-ssh ambf1@192.168.68.109 "sudo systemctl start pleat-saw"
+ssh ambf1@192.168.68.123 "sudo systemctl start pleat-saw"
 
 # View logs
-ssh ambf1@192.168.68.109 "sudo journalctl -u pleat-saw -f"
+ssh ambf1@192.168.68.123 "sudo journalctl -u pleat-saw -f"
 ```
 
 **Deployment Script** (if available):
@@ -2282,7 +2414,7 @@ git commit -m "Initial commit - Version 3.2"
 **Raspberry Pi**:
 - USB 2.0 Port 1: RS-485 adapter Ch0 → /dev/ttyUSB0 (I/O, 9600 baud)
 - USB 2.0 Port 2: RS-485 adapter Ch1 → /dev/ttyUSB1 (Motors, 115200 baud)
-- Ethernet: 192.168.68.109
+- Ethernet: 192.168.68.123
 - GPIO2 (Pin 3): I2C SDA → AS5600 encoder
 - GPIO3 (Pin 5): I2C SCL → AS5600 encoder
 - 3.3V (Pin 1 or 17): AS5600 VCC
@@ -2344,6 +2476,7 @@ to eliminate RS-485 interference issues.
 
 | Date | Version | Description |
 |------|---------|-------------|
+| 2026-01-16 | 3.5.0 | ESP32A/B calibration and cycle reliability fixes: 1000 PPR encoder update with 992 effective calibration, M3 offset to 215 mm, light curtain resume blade restart, M2 forward limit stop, ESP32A status query fix. |
 | 2025-11-13 | 3.4.1 | Fixed operator page "ACTUAL" display - corrected data path from data.motors.axis1.position to data.motors.m3_backstop.position_mm to show M3 encoder position. |
 | 2025-11-13 | 3.4 | AS5600 encoder migrated from ESP32B I2C to Raspberry Pi I2C to eliminate RS-485 interference. New encoder_reader.py service with multi-turn tracking. |
 | 2025-11-13 | 3.3 | M2 manual homing with sensor monitoring, parameter persistence across reboots, M2 jog speed auto-calculation, M3 home moved to dashboard only |
@@ -2362,16 +2495,16 @@ to eliminate RS-485 interference issues.
 - Pi: `/home/ambf1/pleat_saw`
 
 **Network Access**:
-- Raspberry Pi: `ambf1@192.168.68.109` (password: 1978)
-- Web Interface: `http://192.168.68.109:5000/`
-  - Operator: `http://192.168.68.109:5000/`
-  - Engineering: `http://192.168.68.109:5000/engineering`
-  - Dashboard: `http://192.168.68.109:5000/dashboard`
+- Raspberry Pi: `ambf1@192.168.68.123` (password: 1978)
+- Web Interface: `http://192.168.68.123:5000/`
+  - Operator: `http://192.168.68.123:5000/`
+  - Engineering: `http://192.168.68.123:5000/engineering`
+  - Dashboard: `http://192.168.68.123:5000/dashboard`
 
 **Backup Location**: `/Users/ceripritch/Documents/pleat_saw_backups/`
 
 **Documentation**:
-- This file: `COMPREHENSIVE_README.md` (updated November 13, 2025 - Session 4: Operator Page Position Fix)
+- This file: `COMPREHENSIVE_README.md` (updated January 16, 2026 - Session 5: ESP32 Calibrations + Cycle Reliability)
 - Quick start: `README.md`
 - Session summaries: Check backup directory for previous session notes
 
@@ -2383,5 +2516,5 @@ to eliminate RS-485 interference issues.
 ---
 
 **END OF COMPREHENSIVE DOCUMENTATION**
-**Last Updated: November 13, 2025 (Session 4 - Operator Page Position Fix)**
-**Version: 3.4.1**
+**Last Updated: January 16, 2026 (Session 5 - ESP32 Calibrations + Cycle Reliability)**
+**Version: 3.5.0**
