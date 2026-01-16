@@ -241,7 +241,7 @@ class ESP32AUSBSerial:
 
     def query_status(self) -> ESP32AStatus:
         """Send STATUS command and parse reply."""
-        success, resp = self._send_command("?", timeout=self.status_timeout_s)
+        success, resp = self._send_command("?", expect=("STATUS",), timeout=self.status_timeout_s)
         if success and isinstance(resp, str) and resp.startswith("STATUS"):
             self.status = self._parse_status(resp)
         return self.status
